@@ -1,0 +1,287 @@
+"""Playlist download command."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import time
+from pathlib import Path
+from typing import Optional, List
+
+import typer
+from rich.progress import (
+    Progress,
+    BarColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    DownloadColumn,
+    TransferSpeedColumn,
+)
+
+from media_dl.config import get_settings
+from media_dl.core.extractors import get_extractor
+from media_dl.core.strategies import StrategyFactory, build_strategy_args
+from media_dl.core.history import HistoryRepository
+from media_dl.core.progress import create_progress_hook
+from media_dl.core.models import DownloadRequest
+from media_dl.core.exceptions import MediaDLError, ExtractorError, DownloadError
+from media_dl.ui import (
+    console,
+    show_header,
+    create_media_info_table as show_media_info_table,
+    show_success_panel,
+    show_error_panel,
+    show_warning_panel,
+    show_playlist_options,
+    prompt_yes_no,
+    parse_range,
+)
+from media_dl.ui.tables import create_playlist_table, format_size
+
+app = typer.Typer(name="playlist", help="Descargar playlists")
+
+
+def _get_settings():
+    return get_settings()
+
+
+def _run_async(coro):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coro)
+
+
+def _build_ydl_opts(request: DownloadRequest, strategy_args: dict, settings) -> dict:
+    """Build yt-dlp options from request and strategy."""
+    output_template = os.path.join(
+        request.output_path or settings.download_path,
+        "%(title).100s [%(id)s].%(ext)s"
+    )
+
+    opts = {
+        "outtmpl": output_template,
+        "merge_output_format": "mp4",
+        "retries": settings.retry_attempts,
+        "fragment_retries": settings.retry_attempts,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-us,en;q=0.5",
+            "Sec-Fetch-Mode": "navigate",
+        },
+        **strategy_args,
+    }
+
+    if request.media_type == "video":
+        opts["format"] = request.quality or "bestvideo+bestaudio/best"
+    else:
+        if request.format == "mp3":
+            opts["format"] = "bestaudio/best"
+            opts["postprocessors"] = [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": str(request.bitrate),
+            }]
+        else:
+            opts["format"] = "bestaudio/best"
+
+    if request.subtitles:
+        opts["writesubtitles"] = True
+        opts["writeautomaticsub"] = True
+        opts["subtitleslangs"] = request.subtitles
+        opts["subtitlesformat"] = "srt"
+
+    if settings.embed_thumbnail:
+        opts.setdefault("postprocessors", []).append({
+            "key": "EmbedThumbnail",
+            "already_have_thumbnail": False,
+        })
+
+    if settings.embed_metadata:
+        opts.setdefault("postprocessors", []).append({
+            "key": "FFmpegMetadata",
+        })
+
+    if settings.write_info_json:
+        opts["writeinfojson"] = True
+
+    return opts
+
+
+def _download_single(
+    url: str,
+    ydl_opts: dict,
+    progress: Progress,
+    task_id,
+    max_attempts: int,
+) -> str:
+    """Download single item with retry."""
+    from yt_dlp import YoutubeDL
+
+    last_error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if attempt > 1:
+                time.sleep(2)
+
+            ydl_opts["progress_hooks"] = [create_progress_hook(progress, task_id)]
+
+            with YoutubeDL(ydl_opts) as ydl:
+                result = ydl.extract_info(url, download=True)
+                return ydl.prepare_filename(result)
+
+        except Exception as e:
+            last_error = e
+            if attempt == max_attempts:
+                raise DownloadError(f"Falló después de {max_attempts} intentos: {e}", url=url, cause=e)
+
+    raise last_error
+
+
+@app.command()
+def playlist(
+    url: str = typer.Argument(..., help="URL de la playlist"),
+    range: Optional[str] = typer.Option(None, "--range", "-r", help="Rango (ej: 1-5,10,15-20)"),
+    type: str = typer.Option("video", "--type", "-t", help="Tipo: video o audio"),
+    format: str = typer.Option("mp3", "--format", "-f", help="Formato audio (si type=audio)"),
+    bitrate: int = typer.Option(192, "--bitrate", "-b", help="Bitrate MP3"),
+    ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Directorio de salida"),
+):
+    """Descargar playlist completa o rango"""
+    settings = _get_settings()
+    show_header("🎬 DESCARGAR PLAYLIST", f"URL: {url}")
+
+    try:
+        # Extract playlist info
+        console.print("[cyan]🔍 Analizando playlist...[/cyan]")
+        extractor = get_extractor(url)
+        info = _run_async(extractor.extract(url))
+
+        if not info.is_playlist:
+            show_warning_panel("⚠️ No es playlist", "La URL no parece ser una playlist. Usa 'media-dl video' o 'audio'.")
+            raise typer.Exit(1)
+
+        # Show playlist info
+        console.print(show_media_info_table(info))
+
+        # Show entries
+        console.print(create_playlist_table(info.entries, range))
+
+        # Handle range
+        selected_entries = info.entries
+        if range and range.lower() not in ("all", "todo", "*"):
+            try:
+                indices = parse_range(range, len(info.entries))
+                selected_entries = [info.entries[i] for i in indices]
+            except ValueError as e:
+                show_error_panel("Error", str(e))
+                raise typer.Exit(1)
+
+        console.print(f"\n[green]Se descargarán {len(selected_entries)} de {len(info.entries)} elementos[/green]")
+
+        if not prompt_yes_no("¿Continuar?", default=True):
+            console.print("[yellow]Cancelado[/yellow]")
+            return
+
+        # Get strategy
+        strategy = StrategyFactory.get("aria2c" if ultra else "native")
+        if not strategy.is_available() and ultra:
+            show_warning_panel("⚠️ Aria2c no disponible", "Usando modo normal")
+            strategy = StrategyFactory.get("native")
+
+        strategy_args = build_strategy_args(strategy, settings)
+
+        repo = HistoryRepository()
+        successful = 0
+        failed = 0
+
+        for idx, entry in enumerate(selected_entries, 1):
+            console.print(f"\n[bold cyan]{'='*60}[/bold cyan]")
+            console.print(f"[bold]📥 [{idx}/{len(selected_entries)}] {entry.title}[/bold]")
+            console.print(f"[bold cyan]{'='*60}[/bold cyan]")
+
+            try:
+                video_url = entry.url or f"https://www.youtube.com/watch?v={entry.id}"
+
+                # Check duplicate
+                if settings.check_duplicates:
+                    duplicate = repo.is_duplicate(video_url)
+                    if duplicate:
+                        console.print(f"[yellow]⏭️ Saltando (ya descargado): {duplicate.title}[/yellow]")
+                        continue
+
+                # Build request
+                if type == "video":
+                    request = DownloadRequest(
+                        url=video_url, media_type="video",
+                        quality="bestvideo+bestaudio/best",
+                        strategy="ultra" if ultra else "normal", output_path=output
+                    )
+                else:
+                    request = DownloadRequest(
+                        url=video_url, media_type="audio", format=format, bitrate=bitrate,
+                        strategy="ultra" if ultra else "normal", output_path=output
+                    )
+
+                ydl_opts = _build_ydl_opts(request, strategy_args, settings)
+
+                with Progress(
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(bar_width=30, style="cyan", complete_style="bright_cyan"),
+                    "[progress.percentage]{task.percentage:>3.0f}%",
+                    DownloadColumn(),
+                    TransferSpeedColumn(),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task(f"[cyan]{idx}/{len(selected_entries)}", total=100)
+                    filepath = _download_single(video_url, ydl_opts, progress, task, settings.retry_attempts)
+
+                # Save to history
+                file_path = Path(filepath)
+                if type == "audio" and format == "mp3":
+                    file_path = file_path.with_suffix(".mp3")
+
+                file_size = file_path.stat().st_size if file_path.exists() else 0
+
+                repo.add(
+                    url=video_url,
+                    title=entry.title,
+                    platform=info.platform,
+                    media_type=type,
+                    quality=format_str if type == "video" else f"{format} {bitrate}kbps",
+                    file_path=str(file_path),
+                    file_size=file_size,
+                    duration=entry.duration,
+                    uploader=entry.uploader,
+                    thumbnail=entry.thumbnail,
+                )
+
+                successful += 1
+
+            except Exception as e:
+                console.print(f"[error]❌ Error: {e}[/error]")
+                failed += 1
+                continue
+
+        # Summary
+        show_success_panel(
+            "🎬 Playlist Completada",
+            f"✅ Exitosas: {successful}\n"
+            f"❌ Fallidas: {failed}\n"
+            f"📊 Total procesados: {len(selected_entries)}"
+        )
+
+    except MediaDLError as e:
+        show_error_panel("❌ Error", str(e))
+        raise typer.Exit(1)
+    except Exception as e:
+        show_error_panel("❌ Error Inesperado", f"{type(e).__name__}: {e}")
+        raise typer.Exit(1)
