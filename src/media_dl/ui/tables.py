@@ -31,15 +31,25 @@ def format_size(size: int | None) -> str:
     return f"{value:.2f} PB"
 
 
-def format_duration(seconds: int | None) -> str:
+def format_duration(seconds: float | None) -> str:
     """Format duration as human readable string."""
     if not seconds:
         return "N/A"
-    hours, rem = divmod(seconds, 3600)
+    hours, rem = divmod(int(seconds), 3600)
     minutes, secs = divmod(rem, 60)
     if hours:
         return f"{hours}h {minutes}m {secs}s"
     return f"{minutes}m {secs}s"
+
+
+def _cell(value: object, style: str = "") -> Text:
+    """Wrap a value so Rich never interprets it as console markup.
+
+    Los títulos y nombres de archivo contienen corchetes con frecuencia
+    (nuestro template es '%(title).100s [%(id)s].%(ext)s'), y sin esto Rich se
+    come el '[id]' como si fuera una etiqueta de estilo.
+    """
+    return Text(str(value), style=style) if style else Text(str(value))
 
 
 def create_media_info_table(info: MediaInfo) -> Table:
@@ -53,11 +63,11 @@ def create_media_info_table(info: MediaInfo) -> Table:
     table.add_column("Campo", style="bold yellow", width=20)
     table.add_column("Valor", style="white")
 
-    table.add_row("📺 Título", info.title)
-    table.add_row("👤 Canal", info.uploader or "N/A")
+    table.add_row("📺 Título", _cell(info.title))
+    table.add_row("👤 Canal", _cell(info.uploader or "N/A"))
     table.add_row("⏱️ Duración", format_duration(info.duration))
-    table.add_row("🌐 Plataforma", info.platform)
-    table.add_row("🔗 URL", info.url[:60] + "..." if len(info.url) > 60 else info.url)
+    table.add_row("🌐 Plataforma", _cell(info.platform))
+    table.add_row("🔗 URL", _cell(info.url[:60] + "..." if len(info.url) > 60 else info.url))
 
     if info.estimated_size:
         table.add_row("💾 Tamaño est.", format_size(info.estimated_size))
@@ -102,13 +112,13 @@ def create_format_table(formats: list[Format], media_type: str = "video") -> Tab
             )
             table.add_row(
                 str(idx),
-                f.resolution or f"{f.height}p" if f.height else "N/A",
-                f.ext,
-                f.vcodec or "N/A",
-                f.acodec or "N/A",
+                _cell(f.resolution or f"{f.height}p" if f.height else "N/A"),
+                _cell(f.ext),
+                _cell(f.vcodec or "N/A"),
+                _cell(f.acodec or "N/A"),
                 size,
                 f"{f.tbr:.0f}k" if f.tbr else "N/A",
-                f.quality_note or "",
+                _cell(f.quality_note or ""),
             )
     else:
         table.add_column("#", style="dim", width=4, justify="center")
@@ -126,8 +136,8 @@ def create_format_table(formats: list[Format], media_type: str = "video") -> Tab
             )
             table.add_row(
                 str(idx),
-                f.ext,
-                f.acodec or "N/A",
+                _cell(f.ext),
+                _cell(f.acodec or "N/A"),
                 f"{f.abr:.0f}k" if f.abr else "N/A",
                 size,
             )
@@ -154,9 +164,9 @@ def create_history_table(history: list[DownloadHistory], limit: int = 20) -> Tab
         title = record.title[:37] + "..." if len(record.title) > 40 else record.title
         table.add_row(
             str(idx),
-            title,
-            record.platform,
-            record.media_type,
+            _cell(title),
+            _cell(record.platform),
+            _cell(record.media_type),
             format_size(record.file_size),
             record.download_date.strftime("%Y-%m-%d %H:%M") if record.download_date else "N/A",
         )
@@ -230,8 +240,8 @@ def create_system_info_table(
     table.add_row("spotdl", "✅ Disponible" if spotdl_available else "❌ No instalado (opcional)")
     table.add_row("scdl", "✅ Disponible" if scdl_available else "❌ No instalado (opcional)")
     table.add_row("", "")
-    table.add_row("Carpeta descargas", f"📁 {download_path}")
-    table.add_row("Base de datos", f"📄 {db_path}")
+    table.add_row("Carpeta descargas", _cell(f"📁 {download_path}"))
+    table.add_row("Base de datos", _cell(f"📄 {db_path}"))
 
     return table
 
@@ -255,14 +265,14 @@ def create_stats_table(stats: dict[str, Any]) -> Table:
         table.add_row("", "")
         table.add_row("[bold]Por plataforma[/bold]", "")
         for platform, count in sorted(by_platform.items(), key=lambda x: -x[1]):
-            table.add_row(f"  {platform}", str(count))
+            table.add_row(_cell(f"  {platform}"), str(count))
 
     by_type = stats.get("by_type", {})
     if by_type:
         table.add_row("", "")
         table.add_row("[bold]Por tipo[/bold]", "")
         for mtype, count in sorted(by_type.items(), key=lambda x: -x[1]):
-            table.add_row(f"  {mtype}", str(count))
+            table.add_row(_cell(f"  {mtype}"), str(count))
 
     return table
 
@@ -291,11 +301,14 @@ def create_playlist_table(entries: list[PlaylistEntry], selected_range: str | No
 
         table.add_row(
             str(idx),
-            Text(title, style=style),
+            _cell(title, style=style),
             format_duration(entry.duration),
-            (entry.uploader[:17] + "...")
-            if entry.uploader and len(entry.uploader) > 20
-            else (entry.uploader or ""),
+            _cell(
+                (entry.uploader[:17] + "...")
+                if entry.uploader and len(entry.uploader) > 20
+                else (entry.uploader or ""),
+                style=style,
+            ),
             style=style,
         )
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Literal, TypeVar, cast
 
 import typer
+from rich.markup import escape
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -240,7 +241,7 @@ def playlist(
 
         for idx, entry in enumerate(selected_entries, 1):
             console.print(f"\n[bold cyan]{'=' * 60}[/bold cyan]")
-            console.print(f"[bold]📥 [{idx}/{len(selected_entries)}] {entry.title}[/bold]")
+            console.print(f"[bold]📥 [{idx}/{len(selected_entries)}] {escape(entry.title)}[/bold]")
             console.print(f"[bold cyan]{'=' * 60}[/bold cyan]")
 
             try:
@@ -306,7 +307,7 @@ def playlist(
                     else f"{audio_format} {bitrate}kbps",
                     file_path=str(file_path),
                     file_size=file_size,
-                    duration=entry.duration,
+                    duration=int(entry.duration) if entry.duration else None,
                     uploader=entry.uploader,
                     thumbnail=entry.thumbnail,
                 )

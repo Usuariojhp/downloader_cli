@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from rich.markup import escape
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
@@ -242,7 +243,7 @@ def prompt_int(
 def show_info_panel(title: str, content: str) -> None:
     """Show informational panel."""
     panel = Panel(
-        content,
+        escape(content),
         title=f"[bold cyan]{title}[/bold cyan]",
         border_style="cyan",
         box=PANEL_BOX,
@@ -254,7 +255,7 @@ def show_info_panel(title: str, content: str) -> None:
 def show_error_panel(title: str, content: str) -> None:
     """Show error panel."""
     panel = Panel(
-        content,
+        escape(content),
         title=f"[bold red]{title}[/bold red]",
         border_style="red",
         box=PANEL_BOX,
@@ -266,7 +267,7 @@ def show_error_panel(title: str, content: str) -> None:
 def show_success_panel(title: str, content: str) -> None:
     """Show success panel."""
     panel = Panel(
-        content,
+        escape(content),
         title=f"[bold green]{title}[/bold green]",
         border_style="green",
         box=PANEL_BOX,
@@ -278,7 +279,7 @@ def show_success_panel(title: str, content: str) -> None:
 def show_warning_panel(title: str, content: str) -> None:
     """Show warning panel."""
     panel = Panel(
-        content,
+        escape(content),
         title=f"[bold yellow]{title}[/bold yellow]",
         border_style="yellow",
         box=PANEL_BOX,

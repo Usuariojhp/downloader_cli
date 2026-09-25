@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+# Cancela ejecuciones anteriores del mismo ref si hay commits nuevos.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Tests + lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar el proyecto
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Tests
+        run: pytest -q --no-header
+
+      - name: Cobertura mínima
+        run: |
+          pytest -q --no-header --cov=src/media_dl --cov-report=xml
+          # Fallar si la cobertura baja del 65% (actualmente 73%)
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          rate = float(ET.parse("coverage.xml").getroot().get("line-rate", 0)) * 100
+          print(f"Cobertura: {rate:.1f}%")
+          sys.exit(0 if rate >= 65 else 1)
+          PY
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Formato (ruff)
+        run: ruff format --check .
+
+      - name: Tipos (mypy)
+        run: mypy src/
+
+  build:
+    name: Binario portable
+    runs-on: ubuntu-latest
+    # Solo en master: en cada PR costaría ~2 min y 180 MB de artefacto.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pyinstaller
+
+      - name: Compilar
+        run: pyinstaller --clean --noconfirm build/media_dl.spec
+
+      - name: Comprobar que arranca
+        run: |
+          ./dist/media-dl --version
+          ./dist/media-dl doctor
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: media-dl-linux
+          path: dist/media-dl
+          retention-days: 7

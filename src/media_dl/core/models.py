@@ -65,7 +65,7 @@ class PlaylistEntry(BaseModel):
     id: str
     title: str
     url: str
-    duration: int | None = None
+    duration: float | None = None
     thumbnail: str | None = None
     uploader: str | None = None
     index: int | None = None
@@ -85,7 +85,7 @@ class MediaInfo(BaseModel):
     uploader: str | None = None
     uploader_id: str | None = None
     uploader_url: str | None = None
-    duration: int | None = None
+    duration: float | None = None
     view_count: int | None = None
     like_count: int | None = None
     description: str | None = None
@@ -146,7 +146,8 @@ class MediaInfo(BaseModel):
         """Format duration as human readable string."""
         if not self.duration:
             return "N/A"
-        hours, rem = divmod(self.duration, 3600)
+        total = int(self.duration)
+        hours, rem = divmod(total, 3600)
         minutes, seconds = divmod(rem, 60)
         if hours:
             return f"{hours}h {minutes}m {seconds}s"

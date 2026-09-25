@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Literal, TypeVar, cast
 
 import typer
+from rich.markup import escape
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -289,7 +290,7 @@ def run_video(
             quality=format_str,
             file_path=str(file_path),
             file_size=file_size,
-            duration=info.duration,
+            duration=int(info.duration) if info.duration else None,
             uploader=info.uploader,
             thumbnail=info.thumbnail,
         )
@@ -396,7 +397,7 @@ def run_audio(
             quality=f"{audio_format} {bitrate}kbps" if audio_format == "mp3" else "original",
             file_path=str(file_path),
             file_size=file_size,
-            duration=info.duration,
+            duration=int(info.duration) if info.duration else None,
             uploader=info.uploader,
             thumbnail=info.thumbnail,
         )
@@ -534,12 +535,12 @@ def run_batch(
         try:
             info = _run_async(get_extractor(url).extract(url))
         except Exception as e:
-            console.print(f"[error]❌ [{url}] {type(e).__name__}: {e}[/error]")
+            console.print(f"[error]❌ {escape(url)}: {type(e).__name__}: {escape(str(e))}[/error]")
             failed += 1
             continue
 
         if settings.check_duplicates and (duplicate := repo.is_duplicate(url)):
-            console.print(f"[yellow]⏭️ Saltando (ya descargado): {duplicate.title}[/yellow]")
+            console.print(f"[yellow]⏭️ Saltando (ya descargado): {escape(duplicate.title)}[/yellow]")
             skipped += 1
             continue
 
@@ -605,7 +606,8 @@ def run_batch(
 
         if error is not None or not filepath or not Path(filepath).exists():
             failed += 1
-            console.print(f"[error]❌ [{url}] {error or filepath or 'sin resultado'}[/error]")
+            detalle = escape(str(error or filepath or "sin resultado"))
+            console.print(f"[error]❌ {escape(url)}: {detalle}[/error]")
             continue
 
         path = Path(filepath)
@@ -622,7 +624,7 @@ def run_batch(
             or (f"{audio_format} {bitrate}kbps" if audio_format == "mp3" else "original"),
             file_path=str(path),
             file_size=size,
-            duration=info.duration,
+            duration=int(info.duration) if info.duration else None,
             uploader=info.uploader,
             thumbnail=info.thumbnail,
         )

@@ -4,6 +4,7 @@ from media_dl.core.models import (
     DownloadRequest,
     DownloadResult,
     Format,
+    MediaInfo,
     PlaylistEntry,
 )
 
@@ -36,6 +37,29 @@ class TestFormat:
         )
         assert fmt.is_video is False
         assert fmt.is_audio is True
+
+
+class TestDuration:
+    """Regresión: yt-dlp devuelve duraciones decimales (Facebook, reels...) y el
+    modelo las rechazaba con ValidationError, rompiendo la descarga entera."""
+
+    def test_media_info_accepts_float_duration(self):
+        info = MediaInfo(id="x", title="t", url="u", platform="Facebook", duration=74.304)
+        assert info.duration == 74.304
+
+    def test_duration_str_truncates(self):
+        info = MediaInfo(id="x", title="t", url="u", platform="p", duration=74.304)
+        assert info.duration_str == "1m 14s"
+
+    def test_playlist_entry_accepts_float_duration(self):
+        entry = PlaylistEntry(id="1", title="t", url="u", duration=90.75)
+        assert entry.duration == 90.75
+
+    def test_format_duration_accepts_float(self):
+        from media_dl.ui.tables import format_duration
+
+        assert format_duration(90.75) == "1m 30s"
+        assert format_duration(74.304) == "1m 14s"
 
 
 class TestPlaylistEntry:

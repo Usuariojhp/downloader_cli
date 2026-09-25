@@ -54,11 +54,32 @@ class TestSelection:
     def test_tiktok_prefers_tikwn(self):
         assert isinstance(get_extractor("https://tiktok.com/@u/video/1"), TikTokTikwnExtractor)
 
-    def test_spotify(self):
-        assert isinstance(get_extractor("https://open.spotify.com/track/1"), SpotifyExtractor)
+    def test_spotify_when_available(self):
+        """spotdl es opcional: sin él, el registro cae en yt-dlp."""
+        from media_dl.core.extractors.spotify import check_spotdl
 
-    def test_soundcloud(self):
-        assert isinstance(get_extractor("https://soundcloud.com/u/t"), SoundCloudExtractor)
+        extractor = get_extractor("https://open.spotify.com/track/1")
+        if check_spotdl():
+            assert isinstance(extractor, SpotifyExtractor)
+        else:
+            assert isinstance(extractor, YTDLPExtractor)
+
+    def test_soundcloud_when_available(self):
+        """scdl es opcional: sin el binario, el registro cae en yt-dlp."""
+        from media_dl.core.extractors.soundcloud import check_scdl
+
+        extractor = get_extractor("https://soundcloud.com/u/t")
+        if check_scdl():
+            assert isinstance(extractor, SoundCloudExtractor)
+        else:
+            assert isinstance(extractor, YTDLPExtractor)
+
+    def test_spotify_and_soundcloud_are_registered(self):
+        """Aunque falte el extra, el extractor está registrado y con prioridad."""
+        names = [type(e).__name__ for e in ExtractorRegistry().get_all_extractors()]
+
+        assert "SpotifyExtractor" in names
+        assert "SoundCloudExtractor" in names
 
     def test_unknown_falls_back_to_ytdlp(self):
         assert isinstance(get_extractor("https://example.com/v"), YTDLPExtractor)

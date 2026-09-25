@@ -26,14 +26,27 @@ class HistoryRepository:
         self._init_db()
 
     def _get_connection(self) -> Connection:
-        """Get database connection with row factory."""
+        """Get database connection with row factory.
+
+        Usa ``_connection()`` para cerrarla: en sqlite3, ``with conn`` sólo
+        gestiona la transacción, no la conexión.
+        """
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
 
+    @contextmanager
+    def _connection(self) -> Generator[Connection, None, None]:
+        """Read-only connection that is always closed."""
+        conn = self._get_connection()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
     def _init_db(self) -> None:
         """Initialize database schema."""
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS downloads (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,13 +255,13 @@ class HistoryRepository:
 
     def get_by_url_hash(self, url_hash: str) -> DownloadHistory | None:
         """Get record by URL hash."""
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             row = conn.execute("SELECT * FROM downloads WHERE url_hash = ?", (url_hash,)).fetchone()
             return self._row_to_history(row) if row else None
 
     def get_by_file_hash(self, file_hash: str) -> DownloadHistory | None:
         """Get record by file hash."""
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 "SELECT * FROM downloads WHERE file_hash = ?", (file_hash,)
             ).fetchone()
@@ -258,7 +271,7 @@ class HistoryRepository:
         """Check if URL or file is a duplicate."""
         url_hash = self._compute_url_hash(url)
 
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             # Check URL hash
             existing = conn.execute(
                 "SELECT * FROM downloads WHERE url_hash = ?", (url_hash,)
@@ -288,7 +301,7 @@ class HistoryRepository:
         status: str | None = None,
     ) -> builtins.list[DownloadHistory]:
         """List download history with filters."""
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             query = "SELECT * FROM downloads"
             params: list[Any] = []
             conditions = []
@@ -319,7 +332,7 @@ class HistoryRepository:
         status: str | None = None,
     ) -> int:
         """Count total records with filters."""
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             query = "SELECT COUNT(*) FROM downloads"
             params: list[Any] = []
             conditions = []
@@ -362,7 +375,7 @@ class HistoryRepository:
 
     def get_stats(self) -> dict[str, Any]:
         """Get download statistics."""
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             total = conn.execute("SELECT COUNT(*) FROM downloads").fetchone()[0]
             total_size = conn.execute("SELECT SUM(file_size) FROM downloads").fetchone()[0] or 0
 
@@ -401,7 +414,7 @@ class HistoryRepository:
 
     def get_settings_history(self, limit: int = 50) -> builtins.list[SettingsHistory]:
         """Get settings change history."""
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM settings_history ORDER BY changed_at DESC, id DESC LIMIT ?",
                 (limit,),
@@ -410,5 +423,5 @@ class HistoryRepository:
 
     def vacuum(self) -> None:
         """Vacuum database to reclaim space."""
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             conn.execute("VACUUM")

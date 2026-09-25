@@ -16,16 +16,27 @@
 - **Subtítulos** - Descarga automática en múltiples idiomas
 
 ### 🌐 Plataformas Soportadas
-| Plataforma | Video | Audio | Playlists | Notas |
-|------------|-------|-------|-----------|-------|
-| YouTube | ✅ | ✅ | ✅ | Completo |
-| TikTok | ✅ | ✅ | ✅ | API tikwn con fallback a yt-dlp |
-| Instagram | ✅ | ✅ | ❌ | Reels, Stories |
-| Twitter/X | ✅ | ✅ | ❌ | Videos nativos |
-| Facebook | ✅ | ✅ | ❌ | fb.watch |
-| Spotify | ❌ | ✅ | ✅ | Requiere `spotdl` |
-| SoundCloud | ❌ | ✅ | ✅ | Requiere `scdl` |
-| +100 más | ✅ | ✅ | ✅ | Via yt-dlp |
+La columna "Verificado" indica si la descarga se ha probado de extremo a
+extremo contra la plataforma real, no solo si el extractor existe.
+
+| Plataforma | Video | Audio | Playlists | Verificado | Notas |
+|------------|-------|-------|-----------|-----------|-------|
+| YouTube | ✅ | ✅ | ✅ | Sí | Vídeo, MP3, subtítulos, 4K, playlists |
+| TikTok | ✅ | ✅ | ❌ | Sí | API tikwn con degradación a yt-dlp |
+| Facebook | ✅ | ✅ | ❌ | Sí | Vídeos públicos (fb.watch) |
+| Spotify | ❌ | ✅ | ✅ | Metadatos | Requiere `spotdl` para descargar |
+| SoundCloud | ❌ | ✅ | ✅ | No | Requiere `scdl` |
+| Instagram | ⚠️ | ⚠️ | ❌ | No | Ver [Instagram](#instagram-y-x-requieren-cuenta) |
+| Twitter/X | ⚠️ | ⚠️ | ❌ | No | Ver [Instagram](#instagram-y-x-requieren-cuenta) |
+| +100 más | ✅ | ✅ | ✅ | Parcial | Via yt-dlp, depende de la plataforma |
+
+#### Instagram y X requieren cuenta
+Instagram y Twitter/X **no** funcionan de forma anónima: yt-dlp necesita
+credenciales de sesión para ese contenido, y además cambia la API con
+frecuencia. Si ves un error tipo `No video formats found` o `No video could
+be found`, no es un fallo de media-dl sino que la publicación no es pública
+o la plataforma pide login. Para YouTube, TikTok, Facebook y el resto vía
+yt-dlp no hace falta ninguna cuenta.
 
 ### ⚡ Rendimiento
 - **Modo Ultra** - aria2c con 16 conexiones paralelas (hasta 10x más rápido)
@@ -287,11 +298,16 @@ toca tu `~/.config/media-dl` real.
 
 | Comprobación | Estado |
 |---|---|
-| `pytest` | 140 tests, todos en verde |
+| `pytest` | 212 tests, todos en verde |
 | `ruff check .` | 0 errores |
 | `ruff format --check .` | 0 diferencias |
 | `mypy src/` (strict) | 0 errores |
+| Cobertura | 73% (CI falla si baja del 65%) |
 | `pyinstaller` | binario portable verificado |
+| CI (GitHub Actions) | `pytest` + `ruff` + `mypy` + cobertura + binario |
+
+Todo esto corre automáticamente en cada push y en cada Pull Request
+a `.github/workflows/ci.yml`.
 
 ---
 
