@@ -143,14 +143,21 @@ media-dl doctor
 ## 🚀 Uso Rápido
 
 ### Comandos básicos
+Al descargar te **pregunta la calidad** (o el formato de audio), con la que
+tienes configurada marcada como actual. Si en la terminal no hay nadie —un
+script, una tubería, CI— no pregunta y aplica tu configuración.
+
 ```bash
-# Descargar video
+# Descargar video (pregunta la calidad)
 media-dl download video "https://youtube.com/watch?v=..."
 
-# Descargar audio MP3 192kbps
+# Decidir tú la calidad y que no pregunte
+media-dl download video "https://..." -q 1080
+
+# Descargar audio (pregunta formato y bitrate)
 media-dl download audio "https://youtube.com/watch?v=..."
 
-# Descargar playlist completa
+# Descargar playlist completa (automática, no pregunta por cada vídeo)
 media-dl playlist "https://youtube.com/playlist?list=..."
 
 # Ver historial
@@ -224,7 +231,7 @@ export MEDIA_DL_CONFIG_DIR=~/.config/media-dl  # dónde vive config.json
 media-dl download video URL [OPTIONS]
 
 Options:
-  -q, --quality TEXT    Calidad (auto, 2160, 1440, 1080, 720, 480)
+  -q, --quality TEXT    Calidad (pregunta si se omite)
   --ultra / --normal    Modo descarga (default: ultra)
   -s, --subs TEXT       Subtítulos (ej: es,en)
   -o, --output PATH     Directorio de salida
@@ -236,8 +243,8 @@ Options:
 media-dl download audio URL [OPTIONS]
 
 Options:
-  -f, --format [mp3|original]  Formato (default: mp3)
-  -b, --bitrate [128|192|320]  Bitrate MP3 (default: 192)
+  -f, --format [mp3|original]  Formato (pregunta si se omite)
+  -b, --bitrate [128|192|320]  Bitrate MP3 (pregunta si se omite)
   --ultra / --normal           Modo descarga
   -o, --output PATH            Directorio de salida
   -F, --force                  Forzar descarga
@@ -253,6 +260,10 @@ Options:
   -c, --concurrent INT   Descargas simultáneas (1-8, default: 3)
   --ultra / --normal     Modo descarga
 ```
+
+El lote **no pregunta nada**: baja cada URL a la mejor calidad, porque
+preguntar por cada una sería insoportable. Usa la calidad de tu configuración
+(`dl config set default_video_quality ...`).
 
 ### `media-dl playlist`
 ```bash
@@ -342,7 +353,7 @@ toca tu `~/.config/media-dl` real.
 
 | Comprobación | Estado |
 |---|---|
-| `pytest` | 212 tests, todos en verde |
+| `pytest` | 230 tests, todos en verde |
 | `ruff check .` | 0 errores |
 | `ruff format --check .` | 0 diferencias |
 | `mypy src/` (strict) | 0 errores |

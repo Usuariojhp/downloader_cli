@@ -39,13 +39,21 @@ class TestNonInteractive:
         with patch.object(prompts, "is_interactive", return_value=False):
             assert prompts.prompt_quality(["720", "1080"]) == "auto"
 
-    def test_prompt_audio_format_defaults_to_original(self):
+    def test_prompt_audio_format_defaults_to_mp3(self):
         with patch.object(prompts, "is_interactive", return_value=False):
-            assert prompts.prompt_audio_format() == "original"
+            assert prompts.prompt_audio_format() == "mp3"
+
+    def test_prompt_audio_format_honours_configured_default(self):
+        with patch.object(prompts, "is_interactive", return_value=False):
+            assert prompts.prompt_audio_format(default="original") == "original"
 
     def test_prompt_audio_bitrate_defaults_to_192(self):
         with patch.object(prompts, "is_interactive", return_value=False):
             assert prompts.prompt_audio_bitrate() == 192
+
+    def test_prompt_audio_bitrate_honours_configured_default(self):
+        with patch.object(prompts, "is_interactive", return_value=False):
+            assert prompts.prompt_audio_bitrate(default=320) == 320
 
     def test_prompt_url_fails_fast(self):
         with (
@@ -75,6 +83,54 @@ class TestInteractivePaths:
         ):
             mock_prompt.ask.return_value = "1"
             assert prompts.prompt_quality(["720", "1080"]) == "720"
+
+    def test_prompt_quality_last_option_is_auto(self):
+        with (
+            patch.object(prompts, "is_interactive", return_value=True),
+            patch.object(prompts, "Prompt") as mock_prompt,
+        ):
+            mock_prompt.ask.return_value = "3"
+            assert prompts.prompt_quality(["720", "1080"]) == "auto"
+
+    def test_prompt_quality_accepts_heights_with_suffix(self):
+        """MediaInfo.available_qualities ya trae la 'p'; no debe salir '720pp'."""
+        with (
+            patch.object(prompts, "is_interactive", return_value=True),
+            patch.object(prompts, "Prompt") as mock_prompt,
+        ):
+            mock_prompt.ask.return_value = "1"
+            assert prompts.prompt_quality(["1080p", "720p"]) == "1080"
+
+    def test_prompt_quality_marks_configured_default(self):
+        with (
+            patch.object(prompts, "is_interactive", return_value=True),
+            patch.object(prompts, "Prompt") as mock_prompt,
+        ):
+            mock_prompt.ask.return_value = "1"
+            prompts.prompt_quality(["1080p", "720p"], default="720p")
+            shown = "\n".join(str(c) for c in mock_prompt.method_calls)
+            assert shown  # el prompt se emitió
+
+    def test_prompt_quality_default_marker_rendered(self):
+        import io
+
+        from rich.console import Console
+
+        buffer = io.StringIO()
+        fake = Console(file=buffer, width=100, force_terminal=False, markup=True)
+        with (
+            patch.object(prompts, "console", fake),
+            patch.object(prompts, "is_interactive", return_value=True),
+            patch.object(prompts, "Prompt") as mock_prompt,
+        ):
+            mock_prompt.ask.return_value = "1"
+            prompts.prompt_quality(["1080p", "720p"], default="720p")
+        salida = buffer.getvalue()
+
+        assert "1080p" in salida
+        assert "720p" in salida
+        assert "1080pp" not in salida
+        assert "actual" in salida
 
     def test_prompt_audio_bitrate_picks_320(self):
         with (

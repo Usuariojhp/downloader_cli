@@ -120,54 +120,76 @@ def prompt_directory(
 
 
 def prompt_quality(available: list[str], default: str = "auto") -> str:
-    """Prompt for video quality selection."""
+    """Ask which video quality to download.
+
+    Acepta alturas con o sin la 'p' ("720" o "720p") y devuelve siempre el
+    número sin sufijo, o "auto" para la mejor disponible.
+    """
+    qualities = [str(q).strip().rstrip("p") for q in available]
+    marked = str(default).strip().rstrip("p")
+
     console.print("\n[bold cyan]📊 CALIDADES DISPONIBLES[/bold cyan]")
 
-    for idx, q in enumerate(available, 1):
-        marker = " ← [dim](actual)[/dim]" if q == default else ""
+    for idx, q in enumerate(qualities, 1):
+        marker = " [dim](actual)[/dim]" if q == marked else ""
         console.print(f"  {idx}. [cyan]{q}p[/cyan]{marker}")
 
-    console.print(f"  {len(available) + 1}. [yellow]Mejor calidad automática[/yellow]")
+    console.print(f"  {len(qualities) + 1}. [yellow]Mejor calidad automática[/yellow]")
 
     while True:
         choice = _ask(
             "[prompt]Elige calidad[/prompt]",
-            default=str(len(available) + 1),
-            choices=[str(i) for i in range(1, len(available) + 2)],
+            default=str(len(qualities) + 1),
+            choices=[str(i) for i in range(1, len(qualities) + 2)],
             show_choices=False,
         )
 
         idx = int(choice) - 1
-        if idx < len(available):
-            return available[idx]
+        if idx < len(qualities):
+            return qualities[idx]
         return "auto"
 
 
-def prompt_audio_format() -> str:
-    """Prompt for audio format."""
+def prompt_audio_format(default: str = "mp3") -> str:
+    """Ask for the audio format: original or MP3."""
     console.print("\n[bold cyan]🎵 FORMATO DE AUDIO[/bold cyan]")
-    console.print("  1. [green]Formato Original[/green] (Más rápido, sin recodificar)")
-    console.print("  2. [yellow]Convertir a MP3[/yellow]")
 
+    options = [
+        ("original", "1", "Formato Original (Más rápido, sin recodificar)"),
+        ("mp3", "2", "Convertir a MP3"),
+    ]
+    for value, number, label in options:
+        marker = " [dim](actual)[/dim]" if value == default else ""
+        colour = "green" if value == "original" else "yellow"
+        console.print(f"  {number}. [{colour}]{label}[/{colour}]{marker}")
+
+    fallback = "2" if default == "mp3" else "1"
     choice = _ask(
         "[prompt]Elige opción[/prompt]",
-        default="1",
+        default=fallback,
         choices=["1", "2"],
         show_choices=False,
     )
     return "original" if choice == "1" else "mp3"
 
 
-def prompt_audio_bitrate() -> int:
-    """Prompt for MP3 bitrate."""
+def prompt_audio_bitrate(default: int = 192) -> int:
+    """Ask for the MP3 bitrate."""
     console.print("\n[bold cyan]🎚️ CALIDAD MP3 (BITRATE)[/bold cyan]")
-    console.print("  1. [green]320 kbps[/green] (Alta)")
-    console.print("  2. [yellow]192 kbps[/yellow] (Media - Recomendado)")
-    console.print("  3. [red]128 kbps[/red] (Baja)")
 
+    options = [
+        (320, "1", "Alta", "green"),
+        (192, "2", "Media - Recomendado", "yellow"),
+        (128, "3", "Baja", "red"),
+    ]
+    for value, number, label, colour in options:
+        marker = " [dim](actual)[/dim]" if value == default else ""
+        console.print(f"  {number}. [{colour}]{value} kbps · {label}[/{colour}]{marker}")
+
+    fallback = {"320": "1", "192": "2", "128": "3"}.get(str(default), "2")
     choice = _ask(
         "[prompt]Elige calidad[/prompt]",
-        default="2",
+        default=fallback,
         choices=["1", "2", "3"],
         show_choices=False,
     )

@@ -6,8 +6,6 @@ from media_dl.ui.menus import (
     pause,
     prompt_input,
     prompt_int,
-    show_audio_bitrate_menu,
-    show_audio_format_menu,
     show_batch_input_menu,
     show_error_panel,
     show_header,
@@ -15,7 +13,6 @@ from media_dl.ui.menus import (
     show_main_menu,
     show_menu,
     show_playlist_options,
-    show_quality_menu,
     show_success_panel,
     show_warning_panel,
 )
@@ -77,8 +74,6 @@ __all__ = [
     "prompt_urls_batch",
     "prompt_yes_no",
     "reset_console",
-    "show_audio_bitrate_menu",
-    "show_audio_format_menu",
     "show_batch_input_menu",
     "show_error_panel",
     "show_header",
@@ -86,7 +81,6 @@ __all__ = [
     "show_main_menu",
     "show_menu",
     "show_playlist_options",
-    "show_quality_menu",
     "show_success_panel",
     "show_warning_panel",
 ]

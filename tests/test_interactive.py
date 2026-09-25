@@ -51,7 +51,8 @@ class TestMenuRouting:
         # el modo de descarga sale de la configuración, no de un default sucio
         assert run_video.call_args.kwargs["ultra"] is False
 
-    def test_option_2_downloads_audio_with_settings(self, settings):
+    def test_option_2_asks_audio_settings(self, settings):
+        """Sin audio_format/bitrate explícitos, run_audio debe preguntar."""
         with (
             patch("media_dl.main.get_settings", return_value=settings),
             _menu("2", "0"),
@@ -62,10 +63,22 @@ class TestMenuRouting:
             CliRunner().invoke(app, ["interactive"])
 
         kwargs = run_audio.call_args.kwargs
-        assert kwargs["audio_format"] == settings.default_audio_format
-        assert kwargs["bitrate"] == settings.default_audio_bitrate
-        # antes esto pasaba format=... y era el builtin; ahora el nombre es explícito
+        assert kwargs["audio_format"] is None
+        assert kwargs["bitrate"] is None
+        # antes pasaba format=... y era el builtin; ahora el nombre es explícito
         assert "format" not in kwargs
+
+    def test_option_1_asks_quality(self, settings):
+        with (
+            patch("media_dl.main.get_settings", return_value=settings),
+            _menu("1", "0"),
+            patch("typer.prompt", return_value="https://youtube.com/watch?v=abc"),
+            patch("media_dl.cli.commands.download.run_video") as run_video,
+            patch("media_dl.ui.pause"),
+        ):
+            CliRunner().invoke(app, ["interactive"])
+
+        assert run_video.call_args.kwargs["quality"] is None
 
     def test_option_3_runs_batch(self, settings):
         with (

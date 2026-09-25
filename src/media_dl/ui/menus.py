@@ -111,57 +111,6 @@ def show_main_menu() -> str:
     return show_menu("MENÚ PRINCIPAL", options)
 
 
-def show_quality_menu(qualities: list[str], default: str = "auto") -> str:
-    """Show quality selection menu."""
-    table = Table(
-        show_header=False,
-        box=MENU_BOX,
-        border_style="cyan",
-    )
-    table.add_column("#", style="bold green", width=4, justify="center")
-    table.add_column("Calidad", style="white")
-
-    for idx, q in enumerate(qualities, 1):
-        marker = " ←" if q == default else ""
-        table.add_row(str(idx), f"[cyan]{q}p[/cyan]{marker}")
-
-    table.add_row(str(len(qualities) + 1), "[yellow]Mejor calidad automática[/yellow]")
-
-    panel = Panel(
-        table,
-        title="[bold cyan]📊 CALIDADES DISPONIBLES[/bold cyan]",
-        border_style="cyan",
-        padding=(1, 2),
-    )
-    console.print(panel)
-
-    return _ask(
-        "[prompt]Elige calidad[/prompt]",
-        default=str(len(qualities) + 1),
-        choices=[str(i) for i in range(1, len(qualities) + 2)],
-        show_choices=False,
-    )
-
-
-def show_audio_format_menu() -> str:
-    """Show audio format selection."""
-    options = [
-        ("1", "🎵 Formato Original", "Más rápido, sin recodificar"),
-        ("2", "🎵 Convertir a MP3", "Compatible con todos los reproductores"),
-    ]
-    return show_menu("FORMATO DE AUDIO", options, exit_option="Cancelar")
-
-
-def show_audio_bitrate_menu() -> str:
-    """Show MP3 bitrate selection."""
-    options = [
-        ("1", "🟢 320 kbps", "Alta calidad"),
-        ("2", "🟡 192 kbps", "Calidad media (recomendado)"),
-        ("3", "🔴 128 kbps", "Baja calidad, archivo pequeño"),
-    ]
-    return show_menu("CALIDAD MP3 (BITRATE)", options, exit_option="Cancelar")
-
-
 def show_playlist_options(playlist_title: str, total_videos: int) -> str:
     """Show playlist download options."""
     content = Text()

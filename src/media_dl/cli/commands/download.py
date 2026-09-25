@@ -34,12 +34,16 @@ from media_dl.ui import (
 )
 from media_dl.ui import (
     get_console,
+    prompt_audio_bitrate,
+    prompt_audio_format,
+    prompt_quality,
     prompt_yes_no,
     show_error_panel,
     show_header,
     show_success_panel,
     show_warning_panel,
 )
+from media_dl.ui.console import is_interactive
 from media_dl.ui.tables import format_size
 
 app = typer.Typer(name="download", help="Descargar video, audio o lote")
@@ -96,6 +100,15 @@ def _select_video_quality(info: MediaInfo, settings: Settings, quality: str | No
 def _fmt_date(value: datetime | None) -> str:
     """Format a download date, tolerating missing values."""
     return value.strftime("%Y-%m-%d %H:%M") if value else "N/A"
+
+
+def _can_ask() -> bool:
+    """Sólo preguntamos si hay una persona delante de la terminal.
+
+    En scripts, tuberías o CI no hay a quién preguntar, así que se aplica la
+    configuración sin molestar.
+    """
+    return is_interactive()
 
 
 def _merge_postprocessors(opts: dict[str, Any], settings: Settings) -> None:
@@ -238,6 +251,12 @@ def run_video(
                     console.print("[yellow]Descarga cancelada[/yellow]")
                     return
 
+        if quality is None and _can_ask() and info.available_heights:
+            quality = prompt_quality(
+                [str(h) for h in info.available_heights],
+                default=str(settings.default_video_quality),
+            )
+
         format_str = _select_video_quality(info, settings, quality)
 
         strategy = StrategyFactory.get("aria2c" if ultra else "native")
@@ -313,8 +332,8 @@ def run_video(
 
 def run_audio(
     url: str,
-    audio_format: str = "mp3",
-    bitrate: int = 192,
+    audio_format: str | None = None,
+    bitrate: int | None = None,
     ultra: bool = True,
     output: str | None = None,
     force: bool = False,
@@ -340,6 +359,15 @@ def run_audio(
                 if not prompt_yes_no("¿Descargar de nuevo?", default=False):
                     console.print("[yellow]Descarga cancelada[/yellow]")
                     return
+
+        if _can_ask():
+            if audio_format is None:
+                audio_format = prompt_audio_format(default=settings.default_audio_format)
+            if audio_format == "mp3" and bitrate is None:
+                bitrate = prompt_audio_bitrate(default=settings.default_audio_bitrate)
+
+        audio_format = audio_format or settings.default_audio_format
+        bitrate = bitrate or settings.default_audio_bitrate
 
         if audio_format not in ("mp3", "original"):
             show_error_panel("Error", "Formato debe ser 'mp3' u 'original'")
@@ -643,7 +671,7 @@ def run_batch(
 def download_video(
     url: str = typer.Argument(..., help="URL del video"),
     quality: str | None = typer.Option(
-        None, "--quality", "-q", help="Calidad (auto, 1080, 720, etc.)"
+        None, "--quality", "-q", help="Calidad (auto, 1080, 720...); pregunta si se omite"
     ),
     ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido (aria2c)"),
     subs: str | None = typer.Option(None, "--subs", "-s", help="Subtítulos (ej: es,en)"),
@@ -657,8 +685,12 @@ def download_video(
 @app.command("audio")
 def download_audio(
     url: str = typer.Argument(..., help="URL del video/audio"),
-    audio_format: str = typer.Option("mp3", "--format", "-f", help="Formato: mp3 u original"),
-    bitrate: int = typer.Option(192, "--bitrate", "-b", help="Bitrate MP3 (128, 192, 320)"),
+    audio_format: str | None = typer.Option(
+        None, "--format", "-f", help="Formato: mp3 u original (pregunta si se omite)"
+    ),
+    bitrate: int | None = typer.Option(
+        None, "--bitrate", "-b", help="Bitrate MP3: 128, 192, 320 (pregunta si se omite)"
+    ),
     ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido (aria2c)"),
     output: str | None = typer.Option(None, "--output", "-o", help="Directorio de salida"),
     force: bool = typer.Option(False, "--force", "-F", help="Forzar descarga aunque exista"),

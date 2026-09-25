@@ -83,15 +83,21 @@ def interactive() -> None:
             if choice == "1":
                 url = typer.prompt("\n[prompt]📺 Pega la URL del VIDEO[/prompt]").strip()
                 if url:
-                    run_video(url=url, ultra=settings.download_mode == "ultra")
+                    # quality=None → pregunta la calidad disponible
+                    run_video(
+                        url=url,
+                        quality=None,
+                        ultra=settings.download_mode == "ultra",
+                    )
 
             elif choice == "2":
                 url = typer.prompt("\n[prompt]🎵 Pega la URL del AUDIO[/prompt]").strip()
                 if url:
+                    # formato y bitrate None → pregunta ambos
                     run_audio(
                         url=url,
-                        audio_format=settings.default_audio_format,
-                        bitrate=settings.default_audio_bitrate,
+                        audio_format=None,
+                        bitrate=None,
                         ultra=settings.download_mode == "ultra",
                     )
 
