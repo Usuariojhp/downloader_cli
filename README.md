@@ -19,7 +19,7 @@
 | Plataforma | Video | Audio | Playlists | Notas |
 |------------|-------|-------|-----------|-------|
 | YouTube | ✅ | ✅ | ✅ | Completo |
-| TikTok | ✅ | ✅ | ✅ | Fallback tikwn.com |
+| TikTok | ✅ | ✅ | ✅ | API tikwn con fallback a yt-dlp |
 | Instagram | ✅ | ✅ | ❌ | Reels, Stories |
 | Twitter/X | ✅ | ✅ | ❌ | Videos nativos |
 | Facebook | ✅ | ✅ | ❌ | fb.watch |
@@ -287,7 +287,7 @@ toca tu `~/.config/media-dl` real.
 
 | Comprobación | Estado |
 |---|---|
-| `pytest` | 137 tests, todos en verde |
+| `pytest` | 140 tests, todos en verde |
 | `ruff check .` | 0 errores |
 | `ruff format --check .` | 0 diferencias |
 | `mypy src/` (strict) | 0 errores |

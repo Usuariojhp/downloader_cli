@@ -10,6 +10,7 @@ import httpx
 from media_dl.core.exceptions import ExtractorError
 from media_dl.core.extractors.base import Extractor, register_extractor
 from media_dl.core.models import Format, MediaInfo
+from media_dl.ui.console import get_console
 
 
 @register_extractor
@@ -19,6 +20,8 @@ class TikTokTikwnExtractor(Extractor):
     name = "tiktok-tikwn"
     domains: ClassVar[list[str]] = ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"]
     priority = 100  # High priority for TikTok specifically
+    #: La API de terceros puede desaparecer o caerse; en ese caso se usa yt-dlp.
+    fallback_to_ytdlp = True
 
     def __init__(self) -> None:
         super().__init__()
@@ -35,9 +38,22 @@ class TikTokTikwnExtractor(Extractor):
         self.client = httpx.AsyncClient(headers=self.headers, timeout=30.0)
 
     async def extract(self, url: str) -> MediaInfo:
-        """Extract TikTok video info via tikwn.com API."""
+        """Extract TikTok video info via tikwn.com API, falling back to yt-dlp."""
         self.validate_url(url)
 
+        try:
+            return await self._extract_via_api(url)
+        except ExtractorError as e:
+            if not self.fallback_to_ytdlp:
+                raise
+            console = get_console()
+            console.print(f"[yellow]⚠️  {self.name} no disponible ({e}); usando yt-dlp[/yellow]")
+            from media_dl.core.extractors.ytdlp import YTDLPExtractor
+
+            return await YTDLPExtractor().extract(url)
+
+    async def _extract_via_api(self, url: str) -> MediaInfo:
+        """Query the third-party API for direct media URLs."""
         try:
             data = {"url": url, "hd": "1"}
             response = await self.client.post(self.api_url, data=data)

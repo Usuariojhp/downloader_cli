@@ -1,7 +1,10 @@
 """Tests for the extractor registry and URL validation."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
+from media_dl.cli.commands.download import _run_async as _run
 from media_dl.core.exceptions import ValidationError
 from media_dl.core.extractors import (
     SoundCloudExtractor,
@@ -11,6 +14,7 @@ from media_dl.core.extractors import (
     get_extractor,
 )
 from media_dl.core.extractors.base import ExtractorRegistry
+from media_dl.core.models import MediaInfo
 
 
 class TestRegistryDefaults:
@@ -58,6 +62,55 @@ class TestSelection:
 
     def test_unknown_falls_back_to_ytdlp(self):
         assert isinstance(get_extractor("https://example.com/v"), YTDLPExtractor)
+
+
+class TestTikTokFallback:
+    """El extractor de TikTok tiene prioridad 100: si su API third-party cae,
+    debe degradar a yt-dlp en vez de romper la descarga."""
+
+    def test_falls_back_to_ytdlp_on_api_error(self):
+        from media_dl.core.exceptions import ExtractorError
+
+        extractor = TikTokTikwnExtractor()
+        url = "https://www.tiktok.com/@u/video/1"
+
+        esperado = MediaInfo(id="1", title="vía yt-dlp", url=url, platform="TikTok")
+
+        with (
+            patch.object(
+                TikTokTikwnExtractor, "_extract_via_api", side_effect=ExtractorError("API caida")
+            ) as api,
+            patch(
+                "media_dl.core.extractors.ytdlp.YTDLPExtractor.extract",
+                new=AsyncMock(return_value=esperado),
+            ) as ytdlp,
+        ):
+            resultado = _run(extractor.extract(url))
+
+        api.assert_called_once()
+        ytdlp.assert_awaited_once_with(url)
+        assert resultado is esperado
+
+    def test_no_fallback_when_disabled(self):
+        from media_dl.core.exceptions import ExtractorError
+
+        extractor = TikTokTikwnExtractor()
+        extractor.fallback_to_ytdlp = False
+
+        with (
+            patch.object(
+                TikTokTikwnExtractor, "_extract_via_api", side_effect=ExtractorError("API caida")
+            ),
+            pytest.raises(ExtractorError),
+        ):
+            _run(extractor.extract("https://www.tiktok.com/@u/video/1"))
+
+    def test_returns_api_result_when_available(self):
+        extractor = TikTokTikwnExtractor()
+        info = MediaInfo(id="1", title="t", url="u", platform="TikTok")
+
+        with patch.object(TikTokTikwnExtractor, "_extract_via_api", return_value=info):
+            assert _run(extractor.extract("https://www.tiktok.com/@u/video/1")) is info
 
 
 class TestUrlValidation:
