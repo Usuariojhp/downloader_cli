@@ -3,48 +3,54 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import time
+from collections.abc import Coroutine
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+from typing import Any, Literal, TypeVar, cast
 
 import typer
 from rich.progress import (
-    Progress,
     BarColumn,
+    DownloadColumn,
+    Progress,
+    TaskID,
     TextColumn,
     TimeRemainingColumn,
-    DownloadColumn,
     TransferSpeedColumn,
 )
 
-from media_dl.config import get_settings
+from media_dl.config import Settings, get_settings
+from media_dl.core.exceptions import DownloadError, MediaDLError
 from media_dl.core.extractors import get_extractor
-from media_dl.core.strategies import StrategyFactory, build_strategy_args
 from media_dl.core.history import HistoryRepository
+from media_dl.core.models import DownloadRequest, MediaInfo
 from media_dl.core.progress import create_progress_hook
-from media_dl.core.models import DownloadRequest
-from media_dl.core.exceptions import MediaDLError, ExtractorError, DownloadError
+from media_dl.core.strategies import StrategyFactory, build_strategy_args
 from media_dl.ui import (
-    show_header,
     create_media_info_table as show_media_info_table,
-    show_success_panel,
-    show_error_panel,
-    show_warning_panel,
-    prompt_yes_no,
-    pause,
+)
+from media_dl.ui import (
     get_console,
+    prompt_yes_no,
+    show_error_panel,
+    show_header,
+    show_success_panel,
+    show_warning_panel,
 )
 from media_dl.ui.tables import format_size
 
 app = typer.Typer(name="download", help="Descargar video, audio o lote")
 
+console = get_console()
 
-def _get_settings():
+
+def _get_settings() -> Settings:
     return get_settings()
 
 
-def _run_async(coro):
+def _run_async(coro: Coroutine[Any, Any, T]) -> T:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -53,35 +59,71 @@ def _run_async(coro):
     return loop.run_until_complete(coro)
 
 
-def _select_video_quality(info, settings) -> str:
+BEST_VIDEO = "bestvideo+bestaudio/best"
+
+
+def _height_selector(height: int) -> str:
+    return f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+
+
+def _select_video_quality(info: MediaInfo, settings: Settings, quality: str | None = None) -> str:
+    """Build a yt-dlp format selector for the requested quality.
+
+    ``quality`` accepts a height (480, 720, 1080p, ...) or 'auto'. When the
+    requested height is not available the closest one below it is used, so the
+    request is never silently upgraded.
+    """
+    target = quality if quality is not None else settings.default_video_quality
+    normalized = str(target or "auto").strip().lower().rstrip("p")
+
+    if normalized in ("", "auto"):
+        return BEST_VIDEO
+
+    try:
+        wanted = int(normalized)
+    except ValueError:
+        return BEST_VIDEO
+
     heights = info.available_heights
     if not heights:
-        return "bestvideo+bestaudio/best"
+        return _height_selector(wanted)
 
-    if settings.default_video_quality != "auto":
-        try:
-            target = int(settings.default_video_quality)
-            if target in heights:
-                return f"bestvideo[height<={target}]+bestaudio/best[height<={target}]/best"
-        except ValueError:
-            pass
-
-    # For non-interactive, use best available
-    if not settings.auto_subtitle:
-        return "bestvideo+bestaudio/best"
-
-    return "bestvideo+bestaudio/best"
+    best = max((h for h in heights if h <= wanted), default=min(heights))
+    return _height_selector(best)
 
 
-def _build_ydl_opts(request: DownloadRequest, strategy_args: dict, settings) -> dict:
-    output_template = os.path.join(
-        request.output_path or settings.download_path,
-        "%(title).100s [%(id)s].%(ext)s"
-    )
+def _fmt_date(value: datetime | None) -> str:
+    """Format a download date, tolerating missing values."""
+    return value.strftime("%Y-%m-%d %H:%M") if value else "N/A"
+
+
+def _merge_postprocessors(opts: dict[str, Any], settings: Settings) -> None:
+    """Add thumbnail/metadata postprocessors once, keeping any provided ones."""
+    postprocessors = list(opts.get("postprocessors") or [])
+    present = {p.get("key") for p in postprocessors}
+
+    if settings.embed_thumbnail and "EmbedThumbnail" not in present:
+        postprocessors.append({"key": "EmbedThumbnail", "already_have_thumbnail": False})
+    if settings.embed_metadata and "FFmpegMetadata" not in present:
+        postprocessors.append({"key": "FFmpegMetadata"})
+
+    if postprocessors:
+        opts["postprocessors"] = postprocessors
+
+
+def _build_ydl_opts(
+    request: DownloadRequest, strategy_args: dict[str, Any], settings: Settings
+) -> dict[str, Any]:
+    base_path = Path(request.output_path or settings.download_path)
+    output_template = str(base_path / "%(title).100s [%(id)s].%(ext)s")
 
     opts = {
         "outtmpl": output_template,
         "merge_output_format": "mp4",
+        "noprogress": True,
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
         "retries": settings.retry_attempts,
         "fragment_retries": settings.retry_attempts,
         "http_headers": {
@@ -98,17 +140,18 @@ def _build_ydl_opts(request: DownloadRequest, strategy_args: dict, settings) -> 
     }
 
     if request.media_type == "video":
-        opts["format"] = request.quality or "bestvideo+bestaudio/best"
-    else:
-        if request.format == "mp3":
-            opts["format"] = "bestaudio/best"
-            opts["postprocessors"] = [{
+        opts["format"] = request.quality or BEST_VIDEO
+    elif request.format == "mp3":
+        opts["format"] = "bestaudio/best"
+        opts["postprocessors"] = [
+            {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
                 "preferredquality": str(request.bitrate),
-            }]
-        else:
-            opts["format"] = "bestaudio/best"
+            }
+        ]
+    else:
+        opts["format"] = "bestaudio/best"
 
     if request.subtitles:
         opts["writesubtitles"] = True
@@ -116,16 +159,7 @@ def _build_ydl_opts(request: DownloadRequest, strategy_args: dict, settings) -> 
         opts["subtitleslangs"] = request.subtitles
         opts["subtitlesformat"] = "srt"
 
-    if settings.embed_thumbnail:
-        opts.setdefault("postprocessors", []).append({
-            "key": "EmbedThumbnail",
-            "already_have_thumbnail": False,
-        })
-
-    if settings.embed_metadata:
-        opts.setdefault("postprocessors", []).append({
-            "key": "FFmpegMetadata",
-        })
+    _merge_postprocessors(opts, settings)
 
     if settings.write_info_json:
         opts["writeinfojson"] = True
@@ -135,14 +169,14 @@ def _build_ydl_opts(request: DownloadRequest, strategy_args: dict, settings) -> 
 
 def _download_with_retry(
     url: str,
-    ydl_opts: dict,
+    ydl_opts: dict[str, Any],
     progress: Progress,
-    task_id,
+    task_id: TaskID,
     max_attempts: int,
 ) -> str:
     from yt_dlp import YoutubeDL
 
-    last_error = None
+    last_error: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             if attempt > 1:
@@ -152,9 +186,9 @@ def _download_with_retry(
 
             ydl_opts["progress_hooks"] = [create_progress_hook(progress, task_id)]
 
-            with YoutubeDL(ydl_opts) as ydl:
+            with YoutubeDL(ydl_opts) as ydl:  # type: ignore[no-untyped-call]
                 result = ydl.extract_info(url, download=True)
-                return ydl.prepare_filename(result)
+                return cast(str, ydl.prepare_filename(result))
 
         except Exception as e:
             last_error = e
@@ -163,26 +197,26 @@ def _download_with_retry(
                     f"Falló después de {max_attempts} intentos: {e}",
                     url=url,
                     cause=e,
-                )
+                ) from e
 
-    raise last_error
+    raise DownloadError(
+        f"No se intentó la descarga de {url} (intentos: {max_attempts})", url=url, cause=last_error
+    ) from last_error
 
 
-@app.command("video")
-def download_video(
-    url: str = typer.Argument(..., help="URL del video"),
-    quality: Optional[str] = typer.Option(None, "--quality", "-q", help="Calidad (auto, 1080, 720, etc.)"),
-    ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido (aria2c)"),
-    subs: Optional[str] = typer.Option(None, "--subs", "-s", help="Subtítulos (ej: es,en)"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Directorio de salida"),
-    force: bool = typer.Option(False, "--force", "-f", help="Forzar descarga aunque exista"),
-):
-    """Descargar video"""
+def run_video(
+    url: str,
+    quality: str | None = None,
+    ultra: bool = True,
+    subs: str | None = None,
+    output: str | None = None,
+    force: bool = False,
+) -> None:
+    """Download a single video. Plain function, safe to call from other code."""
     settings = _get_settings()
     show_header("📹 DESCARGAR VIDEO", f"URL: {url}")
 
     try:
-        console = get_console()
         console.print("[cyan]🔍 Analizando enlace...[/cyan]")
         extractor = get_extractor(url)
         info = _run_async(extractor.extract(url))
@@ -196,20 +230,20 @@ def download_video(
                 show_warning_panel(
                     "⚠️ Duplicado Detectado",
                     f"Este video ya fue descargado:\n{duplicate.title}\n"
-                    f"Fecha: {duplicate.download_date.strftime('%Y-%m-%d %H:%M')}\n"
-                    f"Tamaño: {format_size(duplicate.file_size)}"
+                    f"Fecha: {_fmt_date(duplicate.download_date)}\n"
+                    f"Tamaño: {format_size(duplicate.file_size)}",
                 )
                 if not prompt_yes_no("¿Descargar de nuevo?", default=False):
                     console.print("[yellow]Descarga cancelada[/yellow]")
                     return
 
-        format_str = quality or _select_video_quality(info, settings)
+        format_str = _select_video_quality(info, settings, quality)
 
         strategy = StrategyFactory.get("aria2c" if ultra else "native")
         if not strategy.is_available() and ultra:
             show_warning_panel(
                 "⚠️ Aria2c no disponible",
-                "Se usará el modo normal. Instala aria2c para descargas ultra rápidas."
+                "Se usará el modo normal. Instala aria2c para descargas ultra rápidas.",
             )
             strategy = StrategyFactory.get("native")
 
@@ -219,7 +253,9 @@ def download_video(
             url=url,
             media_type="video",
             quality=format_str,
-            subtitles=subs.split(",") if subs else (settings.subtitle_languages if settings.auto_subtitle else []),
+            subtitles=subs.split(",")
+            if subs
+            else (settings.subtitle_languages if settings.auto_subtitle else []),
             strategy="ultra" if ultra else "normal",
             output_path=output,
             force=force,
@@ -239,9 +275,7 @@ def download_video(
             task = progress.add_task("[cyan]Descargando...", total=100)
 
             start_time = time.time()
-            filepath = _download_with_retry(
-                url, ydl_opts, progress, task, settings.retry_attempts
-            )
+            filepath = _download_with_retry(url, ydl_opts, progress, task, settings.retry_attempts)
             duration = time.time() - start_time
 
         file_path = Path(filepath)
@@ -265,32 +299,30 @@ def download_video(
             f"Archivo: {file_path.name}\n"
             f"Tamaño: {format_size(file_size)}\n"
             f"Tiempo: {duration:.1f}s\n"
-            f"Ubicación: {file_path}"
+            f"Ubicación: {file_path}",
         )
 
     except MediaDLError as e:
         show_error_panel("❌ Error", str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     except Exception as e:
         show_error_panel("❌ Error Inesperado", f"{type(e).__name__}: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
-@app.command("audio")
-def download_audio(
-    url: str = typer.Argument(..., help="URL del video/audio"),
-    format: str = typer.Option("mp3", "--format", "-f", help="Formato: mp3 u original"),
-    bitrate: int = typer.Option(192, "--bitrate", "-b", help="Bitrate MP3 (128, 192, 320)"),
-    ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido (aria2c)"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Directorio de salida"),
-    force: bool = typer.Option(False, "--force", "-f", help="Forzar descarga aunque exista"),
-):
-    """Descargar audio"""
+def run_audio(
+    url: str,
+    audio_format: str = "mp3",
+    bitrate: int = 192,
+    ultra: bool = True,
+    output: str | None = None,
+    force: bool = False,
+) -> None:
+    """Download audio from a URL. Plain function, safe to call from other code."""
     settings = _get_settings()
     show_header("🎵 DESCARGAR AUDIO", f"URL: {url}")
 
     try:
-        console = get_console()
         console.print("[cyan]🔍 Analizando enlace...[/cyan]")
         extractor = get_extractor(url)
         info = _run_async(extractor.extract(url))
@@ -302,18 +334,17 @@ def download_audio(
             duplicate = repo.is_duplicate(url)
             if duplicate:
                 show_warning_panel(
-                    "⚠️ Duplicado Detectado",
-                    f"Este audio ya fue descargado:\n{duplicate.title}"
+                    "⚠️ Duplicado Detectado", f"Este audio ya fue descargado:\n{duplicate.title}"
                 )
                 if not prompt_yes_no("¿Descargar de nuevo?", default=False):
                     console.print("[yellow]Descarga cancelada[/yellow]")
                     return
 
-        if format not in ("mp3", "original"):
+        if audio_format not in ("mp3", "original"):
             show_error_panel("Error", "Formato debe ser 'mp3' u 'original'")
             raise typer.Exit(1)
 
-        if format == "mp3" and bitrate not in (128, 192, 320):
+        if audio_format == "mp3" and bitrate not in (128, 192, 320):
             show_error_panel("Error", "Bitrate debe ser 128, 192 o 320")
             raise typer.Exit(1)
 
@@ -327,8 +358,8 @@ def download_audio(
         request = DownloadRequest(
             url=url,
             media_type="audio",
-            format=format,
-            bitrate=bitrate,
+            format=cast('Literal["mp3", "original"]', audio_format),
+            bitrate=cast("Literal[128, 192, 320]", bitrate),
             strategy="ultra" if ultra else "normal",
             output_path=output,
             force=force,
@@ -348,13 +379,11 @@ def download_audio(
             task = progress.add_task("[cyan]Descargando audio...", total=100)
 
             start_time = time.time()
-            filepath = _download_with_retry(
-                url, ydl_opts, progress, task, settings.retry_attempts
-            )
+            filepath = _download_with_retry(url, ydl_opts, progress, task, settings.retry_attempts)
             duration = time.time() - start_time
 
         file_path = Path(filepath)
-        if format == "mp3":
+        if audio_format == "mp3":
             file_path = file_path.with_suffix(".mp3")
 
         file_size = file_path.stat().st_size if file_path.exists() else 0
@@ -364,7 +393,7 @@ def download_audio(
             title=info.title,
             platform=info.platform,
             media_type="audio",
-            quality=f"{format} {bitrate}kbps" if format == "mp3" else "original",
+            quality=f"{audio_format} {bitrate}kbps" if audio_format == "mp3" else "original",
             file_path=str(file_path),
             file_size=file_size,
             duration=info.duration,
@@ -375,114 +404,294 @@ def download_audio(
         show_success_panel(
             "✅ Audio Descargado",
             f"Archivo: {file_path.name}\n"
-            f"Formato: {format.upper()}" + (f" {bitrate}kbps" if format == "mp3" else "") + "\n"
+            f"Formato: {audio_format.upper()}"
+            + (f" {bitrate}kbps" if audio_format == "mp3" else "")
+            + "\n"
             f"Tamaño: {format_size(file_size)}\n"
             f"Tiempo: {duration:.1f}s\n"
-            f"Ubicación: {file_path}"
+            f"Ubicación: {file_path}",
         )
 
     except MediaDLError as e:
         show_error_panel("❌ Error", str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     except Exception as e:
         show_error_panel("❌ Error Inesperado", f"{type(e).__name__}: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
-@app.command("batch")
-def download_batch(
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Archivo con URLs (una por línea)"),
-    type: str = typer.Option("video", "--type", "-t", help="Tipo: video o audio"),
-    concurrent: int = typer.Option(3, "--concurrent", "-c", help="Descargas concurrentes"),
-    ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Directorio de salida"),
-    format: str = typer.Option("mp3", "--format", help="Formato audio (si type=audio)"),
-    bitrate: int = typer.Option(192, "--bitrate", help="Bitrate MP3"),
-):
-    """Descarga por lotes desde archivo o entrada"""
+def _build_batch_request(
+    url: str,
+    info: MediaInfo,
+    media_type: str,
+    settings: Settings,
+    output: str | None,
+    ultra: bool,
+    audio_format: str,
+    bitrate: int,
+) -> DownloadRequest:
+    """Build the download request for one batch entry."""
+    strategy: Literal["ultra", "normal"] = "ultra" if ultra else "normal"
+
+    if media_type == "video":
+        return DownloadRequest(
+            url=url,
+            media_type="video",
+            quality=_select_video_quality(info, settings),
+            strategy=strategy,
+            output_path=output,
+        )
+
+    return DownloadRequest(
+        url=url,
+        media_type="audio",
+        format=cast('Literal["mp3", "original"]', audio_format),
+        bitrate=cast("Literal[128, 192, 320]", bitrate),
+        strategy=strategy,
+        output_path=output,
+    )
+
+
+def _download_batch_item(
+    url: str,
+    request: DownloadRequest,
+    strategy_args: dict[str, Any],
+    settings: Settings,
+    progress: Progress,
+    task_id: TaskID,
+) -> str:
+    """Download one batch entry and return the resulting file path."""
+    ydl_opts = _build_ydl_opts(request, strategy_args, settings)
+    return _download_with_retry(url, ydl_opts, progress, task_id, settings.retry_attempts)
+
+
+def run_batch(
+    file: Path | None = None,
+    media_type: str = "video",
+    concurrent: int = 3,
+    ultra: bool = True,
+    output: str | None = None,
+    audio_format: str = "mp3",
+    bitrate: int = 192,
+    urls: list[str] | None = None,
+) -> None:
+    """Download a list of URLs. Plain function, safe to call from other code."""
     settings = _get_settings()
 
-    if file:
+    if media_type not in ("video", "audio"):
+        show_error_panel("Error", "El tipo debe ser 'video' o 'audio'")
+        raise typer.Exit(1)
+    if audio_format not in ("mp3", "original"):
+        show_error_panel("Error", "El formato debe ser 'mp3' u 'original'")
+        raise typer.Exit(1)
+    if audio_format == "mp3" and bitrate not in (128, 192, 320):
+        show_error_panel("Error", "El bitrate debe ser 128, 192 o 320")
+        raise typer.Exit(1)
+
+    workers = max(1, min(concurrent, 8))
+
+    if urls is None and file is not None:
+        if not file.is_file():
+            show_error_panel("Error", f"No existe el archivo: {file}")
+            raise typer.Exit(1)
         urls = file.read_text().strip().splitlines()
-    else:
-        console = get_console()
+    elif urls is None:
         console.print("[dim]Pega URLs (una por línea, línea vacía para terminar):[/dim]")
-        urls = []
+        collected: list[str] = []
         while True:
             url = typer.prompt("[prompt]URL[/prompt]", default="").strip()
             if not url:
                 break
-            urls.append(url)
+            collected.append(url)
+        urls = collected
 
-    urls = [u.strip() for u in urls if u.strip() and (u.startswith("http://") or u.startswith("https://"))]
+    urls = [u.strip() for u in urls if u.strip() and u.startswith(("http://", "https://"))]
 
     if not urls:
         show_error_panel("Error", "No hay URLs válidas")
         raise typer.Exit(1)
 
-    show_header("📋 DESCARGA POR LOTES", f"{len(urls)} URLs - Tipo: {type}")
+    show_header(
+        "📋 DESCARGA POR LOTES",
+        f"{len(urls)} URLs - Tipo: {media_type} - {workers} en paralelo",
+    )
 
     repo = HistoryRepository()
     strategy = StrategyFactory.get("aria2c" if ultra else "native")
     if not strategy.is_available() and ultra:
+        show_warning_panel("⚠️ Aria2c no disponible", "Se usará el modo normal")
         strategy = StrategyFactory.get("native")
 
     strategy_args = build_strategy_args(strategy, settings)
 
-    successful = 0
+    # Fase 1: resolver metadatos y descartar duplicados (secuencial, para no
+    # saturar la red antes de descargar).
+    jobs: list[tuple[str, DownloadRequest, MediaInfo]] = []
+    skipped = 0
     failed = 0
 
-    for idx, url in enumerate(urls, 1):
-        console = get_console()
-        console.print(f"\n[bold cyan]{'='*60}[/bold cyan]")
-        console.print(f"[bold]📥 [{idx}/{len(urls)}] {url}[/bold]")
-        console.print(f"[bold cyan]{'='*60}[/bold cyan]")
-
+    for url in urls:
         try:
-            extractor = get_extractor(url)
-            info = _run_async(extractor.extract(url))
-
-            if settings.check_duplicates:
-                duplicate = repo.is_duplicate(url)
-                if duplicate:
-                    console.print(f"[yellow]⏭️ Saltando (ya descargado): {duplicate.title}[/yellow]")
-                    continue
-
-            if type == "video":
-                format_str = _select_video_quality(info, settings)
-                request = DownloadRequest(
-                    url=url, media_type="video", quality=format_str,
-                    strategy="ultra" if ultra else "normal", output_path=output
-                )
-            else:
-                request = DownloadRequest(
-                    url=url, media_type="audio", format=format, bitrate=bitrate,
-                    strategy="ultra" if ultra else "normal", output_path=output
-                )
-
-            ydl_opts = _build_ydl_opts(request, strategy_args, settings)
-
-            with Progress(
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(bar_width=30, style="cyan", complete_style="bright_cyan"),
-                "[progress.percentage]{task.percentage:>3.0f}%",
-                DownloadColumn(),
-                TransferSpeedColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task(f"[cyan]{idx}/{len(urls)}", total=100)
-                _download_with_retry(url, ydl_opts, progress, task, settings.retry_attempts)
-
-            successful += 1
-
+            info = _run_async(get_extractor(url).extract(url))
         except Exception as e:
-            console.print(f"[error]❌ Error: {e}[/error]")
+            console.print(f"[error]❌ [{url}] {type(e).__name__}: {e}[/error]")
             failed += 1
             continue
+
+        if settings.check_duplicates and (duplicate := repo.is_duplicate(url)):
+            console.print(f"[yellow]⏭️ Saltando (ya descargado): {duplicate.title}[/yellow]")
+            skipped += 1
+            continue
+
+        request = _build_batch_request(
+            url, info, media_type, settings, output, ultra, audio_format, bitrate
+        )
+        jobs.append((url, request, info))
+
+    if not jobs:
+        show_warning_panel(
+            "📊 Lote Finalizado",
+            f"Sin descargas nuevas.\n⏭️ Saltados: {skipped}\n❌ Fallidos: {failed}",
+        )
+        return
+
+    # Fase 2: descarga en paralelo con una barra de progreso compartida.
+    results: dict[str, tuple[DownloadRequest, str, str | None]] = {}
+
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=24, style="cyan", complete_style="bright_cyan"),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        console=console,
+    ) as progress:
+        task_ids = {
+            url: progress.add_task(f"[cyan]{idx}/{len(jobs)} {url[:44]}[/cyan]", total=100)
+            for idx, (url, _, _) in enumerate(jobs, 1)
+        }
+
+        def _run(url: str, request: DownloadRequest) -> None:
+            filepath = _download_batch_item(
+                url, request, strategy_args, settings, progress, task_ids[url]
+            )
+            results[url] = (request, filepath, None)
+
+        def _record_failure(url: str, request: DownloadRequest, exc: BaseException) -> None:
+            results[url] = (request, "", f"{type(exc).__name__}: {exc}")
+
+        if workers > 1 and len(jobs) > 1:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {
+                    pool.submit(_run, url, request): (url, request) for url, request, _ in jobs
+                }
+                for future in as_completed(futures):
+                    url, request = futures[future]
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        _record_failure(url, request, exc)
+        else:
+            for url, request, _ in jobs:
+                try:
+                    _run(url, request)
+                except Exception as exc:
+                    _record_failure(url, request, exc)
+
+    # Fase 3: historial en el hilo principal (SQLite sin concurrencia).
+    successful = 0
+    for url, request, info in jobs:
+        request_outcome, filepath, error = results.get(url, (request, "", "sin resultado"))
+
+        if error is not None or not filepath or not Path(filepath).exists():
+            failed += 1
+            console.print(f"[error]❌ [{url}] {error or filepath or 'sin resultado'}[/error]")
+            continue
+
+        path = Path(filepath)
+        if media_type == "audio" and audio_format == "mp3":
+            path = path.with_suffix(".mp3")
+        size = path.stat().st_size if path.exists() else 0
+
+        repo.add(
+            url=url,
+            title=info.title,
+            platform=info.platform,
+            media_type=media_type,
+            quality=request_outcome.quality
+            or (f"{audio_format} {bitrate}kbps" if audio_format == "mp3" else "original"),
+            file_path=str(path),
+            file_size=size,
+            duration=info.duration,
+            uploader=info.uploader,
+            thumbnail=info.thumbnail,
+        )
+        successful += 1
 
     show_success_panel(
         "📊 Lote Completado",
         f"✅ Exitosas: {successful}\n"
         f"❌ Fallidas: {failed}\n"
-        f"📁 Total: {len(urls)}"
+        f"⏭️ Saltadas: {skipped}\n"
+        f"📁 Total: {len(urls)}",
     )
+
+
+@app.command("video")
+def download_video(
+    url: str = typer.Argument(..., help="URL del video"),
+    quality: str | None = typer.Option(
+        None, "--quality", "-q", help="Calidad (auto, 1080, 720, etc.)"
+    ),
+    ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido (aria2c)"),
+    subs: str | None = typer.Option(None, "--subs", "-s", help="Subtítulos (ej: es,en)"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Directorio de salida"),
+    force: bool = typer.Option(False, "--force", "-F", help="Forzar descarga aunque exista"),
+) -> None:
+    """Descargar video"""
+    run_video(url=url, quality=quality, ultra=ultra, subs=subs, output=output, force=force)
+
+
+@app.command("audio")
+def download_audio(
+    url: str = typer.Argument(..., help="URL del video/audio"),
+    audio_format: str = typer.Option("mp3", "--format", "-f", help="Formato: mp3 u original"),
+    bitrate: int = typer.Option(192, "--bitrate", "-b", help="Bitrate MP3 (128, 192, 320)"),
+    ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido (aria2c)"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Directorio de salida"),
+    force: bool = typer.Option(False, "--force", "-F", help="Forzar descarga aunque exista"),
+) -> None:
+    """Descargar audio"""
+    run_audio(
+        url=url,
+        audio_format=audio_format,
+        bitrate=bitrate,
+        ultra=ultra,
+        output=output,
+        force=force,
+    )
+
+
+@app.command("batch")
+def download_batch(
+    file: Path | None = typer.Option(None, "--file", "-f", help="Archivo con URLs (una por línea)"),
+    media_type: str = typer.Option("video", "--type", "-t", help="Tipo: video o audio"),
+    concurrent: int = typer.Option(3, "--concurrent", "-c", help="Descargas concurrentes (1-8)"),
+    ultra: bool = typer.Option(True, "--ultra/--normal", help="Modo ultra rápido"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Directorio de salida"),
+    audio_format: str = typer.Option("mp3", "--format", help="Formato audio (si type=audio)"),
+    bitrate: int = typer.Option(192, "--bitrate", help="Bitrate MP3"),
+) -> None:
+    """Descarga por lotes desde archivo o entrada"""
+    run_batch(
+        file=file,
+        media_type=media_type,
+        concurrent=concurrent,
+        ultra=ultra,
+        output=output,
+        audio_format=audio_format,
+        bitrate=bitrate,
+    )
+
+
+T = TypeVar("T")

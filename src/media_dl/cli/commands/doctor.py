@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
-import sys
+import importlib
 import shutil
 import subprocess
-import importlib
+import sys
 
 import typer
-from rich.console import Console
 from rich.table import Table
-from rich.box import ROUNDED
 
 from media_dl.config import get_settings
-from media_dl.ui import show_header, show_success_panel, show_error_panel, show_warning_panel, get_console
-from media_dl.ui.theme import TABLE_BOX, TABLE_BORDER_STYLE, TABLE_HEADER_STYLE
+from media_dl.ui import (
+    get_console,
+    show_error_panel,
+    show_header,
+    show_success_panel,
+    show_warning_panel,
+)
+from media_dl.ui.theme import TABLE_BORDER_STYLE, TABLE_BOX, TABLE_HEADER_STYLE
 
 app = typer.Typer(name="doctor", help="Diagnóstico del sistema", invoke_without_command=True)
+
+console = get_console()
 
 
 def _check_command(cmd: str) -> tuple[bool, str]:
@@ -25,11 +31,18 @@ def _check_command(cmd: str) -> tuple[bool, str]:
     if not path:
         return False, "No instalado"
     try:
-        result = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            [cmd, "--version"], capture_output=True, text=True, timeout=5, check=False
+        )
         version = result.stdout.strip().split("\n")[0] if result.stdout else "Desconocida"
         return True, version
     except Exception:
         return True, "Instalado (versión desconocida)"
+
+
+def _missing(tool: str, consequence: str, installed: bool) -> str:
+    """Return a bullet describing a missing external tool."""
+    return "" if installed else f"• {tool}: No instalado ({consequence})"
 
 
 def _check_python_package(pkg: str) -> tuple[bool, str]:
@@ -42,11 +55,8 @@ def _check_python_package(pkg: str) -> tuple[bool, str]:
         return False, "No instalado"
 
 
-@app.callback(invoke_without_command=True)
-def doctor(
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Información detallada"),
-):
-    """Ejecutar diagnóstico del sistema"""
+def run_doctor(verbose: bool = False) -> None:
+    """Print system diagnostics."""
     settings = get_settings()
     show_header("🏥 DIAGNÓSTICO DEL SISTEMA", "media-dl Cyan Edition")
 
@@ -86,20 +96,36 @@ def doctor(
     table.add_row("yt-dlp", "✅" if ytdlp_ok else "❌", ytdlp_ver, "Motor de descarga principal")
     table.add_row("rich", "✅" if rich_ok else "❌", rich_ver, "Interfaz de terminal")
     table.add_row("typer", "✅" if typer_ok else "❌", typer_ver, "Framework CLI")
-    table.add_row("pydantic", "✅" if pydantic_ok else "❌", pydantic_ver, "Validación de configuración")
+    table.add_row(
+        "pydantic", "✅" if pydantic_ok else "❌", pydantic_ver, "Validación de configuración"
+    )
     table.add_row("sqlite3", "✅" if sqlite_ok else "❌", sqlite_ver, "Base de datos (built-in)")
 
     # External tools
     table.add_row("", "", "", "")
     table.add_row("[bold]Herramientas Externas[/bold]", "", "", "")
-    table.add_row("aria2c", "✅" if aria2c_ok else "❌", aria2c_ver, "Descargas ultra rápidas (opcional)")
-    table.add_row("ffmpeg", "✅" if ffmpeg_ok else "❌", ffmpeg_ver, "Conversión audio/video (recomendado)")
+    table.add_row(
+        "aria2c", "✅" if aria2c_ok else "❌", aria2c_ver, "Descargas ultra rápidas (opcional)"
+    )
+    table.add_row(
+        "ffmpeg", "✅" if ffmpeg_ok else "❌", ffmpeg_ver, "Conversión audio/video (recomendado)"
+    )
 
     # Optional
     table.add_row("", "", "", "")
     table.add_row("[bold]Extensiones Opcionales[/bold]", "", "", "")
-    table.add_row("spotdl", "✅" if spotdl_ok else "⚠️", spotdl_ver, "Spotify (pip install 'media-dl[spotify]')")
-    table.add_row("scdl", "✅" if scdl_ok else "⚠️", scdl_ver, "SoundCloud (pip install 'media-dl[soundcloud]')")
+    table.add_row(
+        "spotdl",
+        "✅" if spotdl_ok else "⚠️",
+        spotdl_ver,
+        "Spotify (pip install 'media-dl[spotify]')",
+    )
+    table.add_row(
+        "scdl",
+        "✅" if scdl_ok else "⚠️",
+        scdl_ver,
+        "SoundCloud (pip install 'media-dl[soundcloud]')",
+    )
 
     # Paths
     table.add_row("", "", "", "")
@@ -108,8 +134,7 @@ def doctor(
     table.add_row("Database", "📄", str(settings.db_path), "")
     table.add_row("Downloads", "📁", str(settings.download_path), "")
 
-    c = get_console()
-    c.print(table)
+    console.print(table)
 
     # Summary
     all_required = all([ytdlp_ok, rich_ok, typer_ok, pydantic_ok, sqlite_ok])
@@ -119,38 +144,34 @@ def doctor(
         show_success_panel(
             "✅ Sistema Listo",
             "Todos los componentes requeridos están disponibles.\n"
-            "Las descargas ultra rápidas (aria2c) y conversión (ffmpeg) funcionarán."
+            "Las descargas ultra rápidas (aria2c) y conversión (ffmpeg) funcionarán.",
         )
     elif all_required:
         show_warning_panel(
             "⚠️ Sistema Parcial",
             "Componentes principales OK, pero faltan herramientas externas:\n"
-            f"{'• aria2c: No instalado (descargas ultra no disponibles)' if not aria2c_ok else ''}\n"
-            f"{'• ffmpeg: No instalado (conversión MP3 no disponible)' if not ffmpeg_ok else ''}\n\n"
+            f"{_missing('aria2c', 'descargas ultra no disponibles', aria2c_ok)}\n"
+            f"{_missing('ffmpeg', 'conversión MP3 no disponible', ffmpeg_ok)}\n\n"
             "Instala con:\n"
             "  • Ubuntu/Debian: sudo apt install aria2 ffmpeg\n"
             "  • macOS: brew install aria2 ffmpeg\n"
-            "  • Windows: choco install aria2 ffmpeg"
+            "  • Windows: choco install aria2 ffmpeg",
         )
     else:
         show_error_panel(
             "❌ Sistema Incompleto",
-            "Faltan dependencias Python requeridas.\n"
-            "Ejecuta: pip install -e '.[dev]'"
+            "Faltan dependencias Python requeridas.\nEjecuta: pip install -e '.[dev]'",
         )
 
     if verbose:
         console.print("\n[bold]Información adicional:[/bold]")
         console.print(f"  Platform: {sys.platform}")
         console.print(f"  Executable: {sys.executable}")
-        console.print(f"  Config: {settings.config_dir / 'config.json'}")
+        console.print(f"  Config: {settings.config_file}")
 
 
-@app.command()
-def update():
-    """Actualizar yt-dlp y dependencias"""
-    import subprocess
-
+def update_deps() -> None:
+    """Upgrade yt-dlp and core dependencies."""
     show_header("🔄 ACTUALIZANDO DEPENDENCIAS")
 
     packages = [
@@ -167,6 +188,7 @@ def update():
             [sys.executable, "-m", "pip", "install", "--upgrade", pkg],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode == 0:
             console.print(f"  [green]✅ {pkg} actualizado[/green]")
@@ -174,3 +196,17 @@ def update():
             console.print(f"  [red]❌ Error actualizando {pkg}: {result.stderr}[/red]")
 
     show_success_panel("✅ Actualización Completada", "Reinicia media-dl para aplicar cambios")
+
+
+@app.callback(invoke_without_command=True)
+def doctor(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Información detallada"),
+) -> None:
+    """Ejecutar diagnóstico del sistema"""
+    run_doctor(verbose)
+
+
+@app.command("update")
+def update() -> None:
+    """Actualizar yt-dlp y dependencias"""
+    update_deps()

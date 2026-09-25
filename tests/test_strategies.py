@@ -1,18 +1,17 @@
 """Tests for download strategies."""
 
-import pytest
-import shutil
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from media_dl.core.strategies import (
-    DownloadStrategy,
-    StrategyFactory,
-    Aria2cStrategy,
-    NativeStrategy,
-    build_strategy_args,
-)
+import pytest
+
 from media_dl.config import Settings
 from media_dl.core.exceptions import StrategyError
+from media_dl.core.strategies import (
+    Aria2cStrategy,
+    NativeStrategy,
+    StrategyFactory,
+    build_strategy_args,
+)
 
 
 class TestAria2cStrategy:

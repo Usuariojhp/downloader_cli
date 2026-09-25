@@ -3,24 +3,24 @@
 from media_dl.core.extractors.base import (
     Extractor,
     ExtractorRegistry,
-    registry,
-    register_extractor,
     get_extractor,
+    register_extractor,
+    registry,
 )
-from media_dl.core.extractors.ytdlp import YTDLPExtractor, extract_with_ytdlp
-from media_dl.core.extractors.tiktok_tikwn import TikTokTikwnExtractor
-from media_dl.core.extractors.spotify import SpotifyExtractor
 from media_dl.core.extractors.soundcloud import SoundCloudExtractor
+from media_dl.core.extractors.spotify import SpotifyExtractor
+from media_dl.core.extractors.tiktok_tikwn import TikTokTikwnExtractor
+from media_dl.core.extractors.ytdlp import YTDLPExtractor, extract_with_ytdlp
 
 __all__ = [
     "Extractor",
     "ExtractorRegistry",
-    "registry",
-    "register_extractor",
-    "get_extractor",
+    "SoundCloudExtractor",
+    "SpotifyExtractor",
+    "TikTokTikwnExtractor",
     "YTDLPExtractor",
     "extract_with_ytdlp",
-    "TikTokTikwnExtractor",
-    "SpotifyExtractor",
-    "SoundCloudExtractor",
+    "get_extractor",
+    "register_extractor",
+    "registry",
 ]

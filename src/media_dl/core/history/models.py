@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Dict, Any
-import json
+from typing import Any
 
 
 @dataclass
 class DownloadHistory:
     """Download history record."""
-    id: Optional[int] = None
+
+    id: int | None = None
     url: str = ""
     url_hash: str = ""
     title: str = ""
@@ -20,20 +20,21 @@ class DownloadHistory:
     quality: str = ""
     file_path: str = ""
     file_size: int = 0
-    file_hash: Optional[str] = None
-    download_date: Optional[datetime] = None
+    file_hash: str | None = None
+    download_date: datetime | None = None
     status: str = "completed"
-    info_json: Optional[Dict[str, Any]] = None
-    duration: Optional[int] = None
-    uploader: Optional[str] = None
-    thumbnail: Optional[str] = None
+    info_json: dict[str, Any] | None = None
+    duration: int | None = None
+    uploader: str | None = None
+    thumbnail: str | None = None
 
 
 @dataclass
 class SettingsHistory:
     """Settings change history."""
-    id: Optional[int] = None
+
+    id: int | None = None
     key: str = ""
-    old_value: Optional[str] = None
-    new_value: Optional[str] = None
-    changed_at: Optional[datetime] = None
+    old_value: str | None = None
+    new_value: str | None = None
+    changed_at: datetime | None = None

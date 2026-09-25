@@ -1,15 +1,14 @@
 """Tests for extractors."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
+from media_dl.core.exceptions import ValidationError
 from media_dl.core.extractors import (
-    get_extractor,
-    YTDLPExtractor,
     TikTokTikwnExtractor,
+    YTDLPExtractor,
+    get_extractor,
 )
 from media_dl.core.extractors.base import ExtractorRegistry
-from media_dl.core.exceptions import ExtractorError, ValidationError
 
 
 class TestYTDLPExtractor:

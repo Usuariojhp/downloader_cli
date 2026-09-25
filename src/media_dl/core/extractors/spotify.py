@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Optional, List
 import asyncio
+from typing import Any, ClassVar
 
-from media_dl.core.extractors.base import Extractor, register_extractor
-from media_dl.core.models import MediaInfo, Format, PlaylistEntry
 from media_dl.core.exceptions import ExtractorError
+from media_dl.core.extractors.base import Extractor, register_extractor
+from media_dl.core.models import Format, MediaInfo, PlaylistEntry
 
-
-_spotdl_available: Optional[bool] = None
+_spotdl_available: bool | None = None
 
 
 def check_spotdl() -> bool:
@@ -19,6 +18,7 @@ def check_spotdl() -> bool:
     if _spotdl_available is None:
         try:
             import spotdl  # noqa: F401
+
             _spotdl_available = True
         except ImportError:
             _spotdl_available = False
@@ -30,15 +30,15 @@ class SpotifyExtractor(Extractor):
     """Spotify extractor using spotdl."""
 
     name = "spotify"
-    domains = ["open.spotify.com", "spotify.com"]
+    domains: ClassVar[list[str]] = ["open.spotify.com", "spotify.com"]
     priority = 90
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self._spotdl = None
-        self._downloader = None
+        self._spotdl: Any = None
+        self._downloader: Any = None
 
-    def _ensure_spotdl(self):
+    def _ensure_spotdl(self) -> Any:
         """Lazy import and initialize spotdl."""
         if not check_spotdl():
             raise ExtractorError(
@@ -47,7 +47,6 @@ class SpotifyExtractor(Extractor):
             )
         if self._spotdl is None:
             from spotdl import Spotdl
-            from spotdl.types.song import Song
 
             # Initialize with default settings
             self._spotdl = Spotdl(
@@ -81,9 +80,8 @@ class SpotifyExtractor(Extractor):
 
     def _extract_sync(self, url: str) -> MediaInfo:
         """Synchronous extraction using spotdl."""
-        from spotdl.types.song import Song
-        from spotdl.types.playlist import Playlist
         from spotdl.types.album import Album
+        from spotdl.types.playlist import Playlist
 
         try:
             # Search for the content
@@ -103,9 +101,11 @@ class SpotifyExtractor(Extractor):
                 return self._parse_track(first, url)
 
         except Exception as e:
-            raise ExtractorError(f"Spotify extraction failed: {e}", url=url, platform="Spotify", cause=e)
+            raise ExtractorError(
+                f"Spotify extraction failed: {e}", url=url, platform="Spotify", cause=e
+            ) from e
 
-    def _parse_track(self, song, url: str) -> MediaInfo:
+    def _parse_track(self, song: Any, url: str) -> MediaInfo:
         """Parse single track."""
         format_obj = Format(
             format_id="spotify_best",
@@ -129,7 +129,7 @@ class SpotifyExtractor(Extractor):
             is_playlist=False,
         )
 
-    def _parse_playlist(self, playlist, url: str) -> MediaInfo:
+    def _parse_playlist(self, playlist: Any, url: str) -> MediaInfo:
         """Parse playlist."""
         entries = []
         for idx, song in enumerate(playlist.songs or [], 1):
@@ -141,16 +141,18 @@ class SpotifyExtractor(Extractor):
                 abr=320,
                 quality_note="320kbps MP3",
             )
-            entries.append(PlaylistEntry(
-                id=song.song_id or f"track_{idx}",
-                title=song.name,
-                url=f"https://open.spotify.com/track/{song.song_id}" if song.song_id else url,
-                duration=song.duration,
-                thumbnail=song.cover_url,
-                uploader=", ".join(song.artists) if song.artists else None,
-                index=idx,
-                formats=[format_obj],
-            ))
+            entries.append(
+                PlaylistEntry(
+                    id=song.song_id or f"track_{idx}",
+                    title=song.name,
+                    url=f"https://open.spotify.com/track/{song.song_id}" if song.song_id else url,
+                    duration=song.duration,
+                    thumbnail=song.cover_url,
+                    uploader=", ".join(song.artists) if song.artists else None,
+                    index=idx,
+                    formats=[format_obj],
+                )
+            )
 
         return MediaInfo(
             id=playlist.id or "",
@@ -169,7 +171,7 @@ class SpotifyExtractor(Extractor):
             entries=entries,
         )
 
-    def _parse_album(self, album, url: str) -> MediaInfo:
+    def _parse_album(self, album: Any, url: str) -> MediaInfo:
         """Parse album."""
         entries = []
         for idx, song in enumerate(album.songs or [], 1):
@@ -181,16 +183,18 @@ class SpotifyExtractor(Extractor):
                 abr=320,
                 quality_note="320kbps MP3",
             )
-            entries.append(PlaylistEntry(
-                id=song.song_id or f"track_{idx}",
-                title=song.name,
-                url=f"https://open.spotify.com/track/{song.song_id}" if song.song_id else url,
-                duration=song.duration,
-                thumbnail=song.cover_url,
-                uploader=", ".join(song.artists) if song.artists else None,
-                index=idx,
-                formats=[format_obj],
-            ))
+            entries.append(
+                PlaylistEntry(
+                    id=song.song_id or f"track_{idx}",
+                    title=song.name,
+                    url=f"https://open.spotify.com/track/{song.song_id}" if song.song_id else url,
+                    duration=song.duration,
+                    thumbnail=song.cover_url,
+                    uploader=", ".join(song.artists) if song.artists else None,
+                    index=idx,
+                    formats=[format_obj],
+                )
+            )
 
         return MediaInfo(
             id=album.id or "",

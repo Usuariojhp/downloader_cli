@@ -1,13 +1,27 @@
 """Test configuration and fixtures."""
 
-import pytest
-import tempfile
 import os
+import tempfile
 from pathlib import Path
+
+import pytest
 
 from media_dl.config import Settings, reset_settings
 from media_dl.core.history import HistoryRepository
-from media_dl.core.models import MediaInfo, Format, PlaylistEntry
+from media_dl.core.models import Format, MediaInfo, PlaylistEntry
+
+
+@pytest.fixture(autouse=True, scope="session")
+def isolated_config_dir(tmp_path_factory):
+    """Point MEDIA_DL_CONFIG_DIR to a temp dir so tests never touch user config/DB."""
+    config_dir = tmp_path_factory.mktemp("media-dl-config")
+    previous = os.environ.get("MEDIA_DL_CONFIG_DIR")
+    os.environ["MEDIA_DL_CONFIG_DIR"] = str(config_dir)
+    yield config_dir
+    if previous is None:
+        os.environ.pop("MEDIA_DL_CONFIG_DIR", None)
+    else:
+        os.environ["MEDIA_DL_CONFIG_DIR"] = previous
 
 
 @pytest.fixture(autouse=True)

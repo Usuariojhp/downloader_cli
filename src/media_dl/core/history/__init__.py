@@ -5,6 +5,6 @@ from media_dl.core.history.repository import HistoryRepository
 
 __all__ = [
     "DownloadHistory",
-    "SettingsHistory",
     "HistoryRepository",
+    "SettingsHistory",
 ]

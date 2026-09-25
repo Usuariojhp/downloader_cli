@@ -1,5 +1,7 @@
 """Custom exception hierarchy for media-dl."""
 
+from typing import Any
+
 
 class MediaDLError(Exception):
     """Base exception for all media-dl errors."""
@@ -87,6 +89,6 @@ class PlatformNotSupportedError(ExtractorError):
 class DuplicateDownloadError(DownloadError):
     """Raised when duplicate download is detected."""
 
-    def __init__(self, message: str, *, existing_path: str, **kwargs):
+    def __init__(self, message: str, *, existing_path: str, **kwargs: Any) -> None:
         super().__init__(message, **kwargs)
         self.existing_path = existing_path

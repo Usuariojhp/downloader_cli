@@ -1,7 +1,7 @@
 """Aria2c ultra-fast download strategy."""
 
 import shutil
-from typing import Dict, Any
+from typing import Any
 
 from media_dl.config.settings import Settings
 from media_dl.core.strategies.base import DownloadStrategy
@@ -17,7 +17,7 @@ class Aria2cStrategy(DownloadStrategy):
         """Check if aria2c is installed."""
         return shutil.which("aria2c") is not None
 
-    def build_args(self, settings: Settings) -> Dict[str, Any]:
+    def build_args(self, settings: Settings) -> dict[str, Any]:
         """Build aria2c arguments."""
         connections = min(settings.aria2c_connections, 16)
         split = min(settings.aria2c_split, 16)
@@ -39,9 +39,7 @@ class Aria2cStrategy(DownloadStrategy):
 
         return {
             "external_downloader": "aria2c",
-            "external_downloader_args": {
-                "aria2c": aria2c_args
-            },
+            "external_downloader_args": {"aria2c": aria2c_args},
         }
 
     def get_display_name(self, settings: Settings) -> str:

@@ -2,79 +2,86 @@
 
 from __future__ import annotations
 
-import typer
 from pathlib import Path
-from typing import Optional
 
-from media_dl.config import get_settings, Settings
+import typer
+
+from media_dl.config import Settings, get_settings
 from media_dl.core.history import HistoryRepository
 from media_dl.ui import (
-    show_header,
-    show_error_panel,
-    show_success_panel,
-    show_warning_panel,
-    pause,
-    prompt_directory,
-    prompt_yes_no,
-    prompt_int_range,
-    prompt_config_value,
     get_console,
+    pause,
+    prompt_config_value,
+    prompt_directory,
+    prompt_int_range,
+    prompt_yes_no,
+    show_error_panel,
+    show_header,
+    show_success_panel,
 )
 from media_dl.ui.tables import create_config_table
 
 app = typer.Typer(name="config", help="Configuración")
+
+console = get_console()
+
+VALID_KEYS = {
+    "download_path": ("path", "Carpeta de descargas"),
+    "download_mode": ("choice", "Modo de descarga (ultra/normal)"),
+    "default_video_quality": ("string", "Calidad video por defecto"),
+    "default_audio_format": ("choice", "Formato audio (original/mp3)"),
+    "default_audio_bitrate": ("int", "Bitrate audio (128/192/320)"),
+    "auto_subtitle": ("bool", "Subtítulos automáticos"),
+    "subtitle_languages": ("list", "Idiomas subtítulos (coma separados)"),
+    "retry_attempts": ("int", "Intentos de reintento (1-10)"),
+    "check_duplicates": ("bool", "Verificar duplicados"),
+    "aria2c_connections": ("int", "Conexiones Aria2c (4-32)"),
+    "aria2c_split": ("int", "Split Aria2c (1-32)"),
+    "max_download_speed": ("int", "Límite velocidad KB/s (0=sin límite)"),
+    "concurrent_downloads": ("int", "Descargas concurrentes (1-8)"),
+    "embed_thumbnail": ("bool", "Insertar miniatura"),
+    "embed_metadata": ("bool", "Insertar metadatos"),
+    "write_info_json": ("bool", "Escribir info.json"),
+}
+
+INT_RANGES = {
+    "default_audio_bitrate": (128, 320),
+    "retry_attempts": (1, 10),
+    "aria2c_connections": (4, 32),
+    "aria2c_split": (1, 32),
+    "max_download_speed": (0, 1_000_000),
+    "concurrent_downloads": (1, 8),
+}
 
 
 def _get_settings() -> Settings:
     return get_settings()
 
 
-@app.command()
-def show():
-    """Mostrar configuración actual"""
+def show_config() -> None:
+    """Print the current configuration."""
     settings = _get_settings()
     show_header("⚙️ CONFIGURACIÓN ACTUAL")
 
     config_dict = settings.model_dump()
     c = get_console()
     c.print(create_config_table(config_dict))
+    console.print(f"[dim]Archivo: {settings.config_file}[/dim]")
     pause()
 
 
-@app.command()
-def set(
-    key: str = typer.Argument(..., help="Clave a modificar"),
-    value: Optional[str] = typer.Argument(None, help="Nuevo valor (interactivo si se omite)"),
-):
-    """Establecer valor de configuración"""
+def set_config(key: str, value: str | None = None) -> None:
+    """Set a configuration value (interactive when value is None)."""
     settings = _get_settings()
     repo = HistoryRepository()
 
-    # Valid keys
-    valid_keys = {
-        "download_path": ("path", "Carpeta de descargas"),
-        "download_mode": ("choice", "Modo de descarga (ultra/normal)"),
-        "default_video_quality": ("string", "Calidad video por defecto"),
-        "default_audio_format": ("choice", "Formato audio (original/mp3)"),
-        "default_audio_bitrate": ("int", "Bitrate audio (128/192/320)"),
-        "auto_subtitle": ("bool", "Subtítulos automáticos"),
-        "subtitle_languages": ("list", "Idiomas subtítulos (coma separados)"),
-        "retry_attempts": ("int", "Intentos de reintento (1-10)"),
-        "check_duplicates": ("bool", "Verificar duplicados"),
-        "aria2c_connections": ("int", "Conexiones Aria2c (4-32)"),
-        "aria2c_split": ("int", "Split Aria2c (1-32)"),
-        "max_download_speed": ("int", "Límite velocidad KB/s (0=sin límite)"),
-        "concurrent_downloads": ("int", "Descargas concurrentes (1-8)"),
-        "embed_thumbnail": ("bool", "Insertar miniatura"),
-        "embed_metadata": ("bool", "Insertar metadatos"),
-        "write_info_json": ("bool", "Escribir info.json"),
-    }
-
-    if key not in valid_keys:
-        show_error_panel("Error", f"Clave inválida: {key}\nClaves válidas: {', '.join(valid_keys.keys())}")
+    if key not in VALID_KEYS:
+        show_error_panel(
+            "Error", f"Clave inválida: {key}\nClaves válidas: {', '.join(VALID_KEYS.keys())}"
+        )
         raise typer.Exit(1)
 
-    value_type, description = valid_keys[key]
+    value_type, description = VALID_KEYS[key]
     current = getattr(settings, key)
 
     if value is None:
@@ -95,13 +102,10 @@ def set(
         elif value_type == "path":
             value = prompt_directory(f"Nueva {description}", default=str(current))
         elif value_type == "int":
-            min_val = 4 if "connections" in key else (1 if "split" in key else (1 if "concurrent" in key else 1))
-            max_val = 32 if "connections" in key or "split" in key else (8 if "concurrent" in key else 10)
+            min_val, max_val = INT_RANGES.get(key, (1, 1000))
             value = str(prompt_int_range(f"Nuevo {description}", min_val, max_val, int(current)))
         elif value_type == "bool":
             value = "true" if prompt_yes_no(f"¿Activar {description}?", current) else "false"
-        elif value_type == "list":
-            value = prompt_config_value(key, str(current), value_type)
         else:
             value = prompt_config_value(key, str(current), value_type)
 
@@ -110,7 +114,11 @@ def set(
         old_value = str(current)
 
         if value_type == "int":
-            setattr(settings, key, int(value))
+            number = int(value)
+            bounds = INT_RANGES.get(key)
+            if bounds is not None and not bounds[0] <= number <= bounds[1]:
+                raise ValueError(f"el valor debe estar entre {bounds[0]} y {bounds[1]}")
+            setattr(settings, key, number)
         elif value_type == "bool":
             setattr(settings, key, value.lower() in ("true", "1", "yes", "s", "si"))
         elif value_type == "list":
@@ -122,50 +130,50 @@ def set(
         else:
             setattr(settings, key, value)
 
-        settings.save_config()
+        config_path = settings.save_config()
         repo.log_settings_change(key, old_value, value)
 
-        show_success_panel("✅ Configuración Actualizada", f"{key} = {value}")
+        show_success_panel(
+            "✅ Configuración Actualizada", f"{key} = {value}\nGuardado en {config_path}"
+        )
 
     except Exception as e:
         show_error_panel("Error", f"No se pudo establecer {key}: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
-@app.command()
-def reset(
-    force: bool = typer.Option(False, "--force", "-f", help="No pedir confirmación"),
-):
-    """Restablecer configuración por defecto"""
+def reset_config(force: bool = False) -> None:
+    """Restore factory defaults for user preferences."""
     settings = _get_settings()
     repo = HistoryRepository()
 
     show_header("🔄 RESTABLECER CONFIGURACIÓN")
 
-    if not force:
-        if not prompt_yes_no("¿Restablecer TODA la configuración a valores por defecto?", default=False):
-            console.print("[yellow]Cancelado[/yellow]")
-            return
+    if not force and not prompt_yes_no(
+        "¿Restablecer TODA la configuración a valores por defecto?", default=False
+    ):
+        console.print("[yellow]Cancelado[/yellow]")
+        return
 
-    # Reset to defaults by creating new settings
-    new_settings = Settings()
-    for key in settings.model_fields:
-        if key in new_settings.model_fields:
-            old = getattr(settings, key)
-            new = getattr(new_settings, key)
-            if old != new:
-                repo.log_settings_change(key, str(old), str(new))
+    # Reset user preferences to factory defaults (runtime paths are preserved)
+    new_settings = Settings.defaults()
+    for key in settings.to_config_dict():
+        old = getattr(settings, key)
+        new = getattr(new_settings, key)
+        if old != new:
+            repo.log_settings_change(key, str(old), str(new))
+            setattr(settings, key, new)
 
-    # Save new defaults
-    new_settings.save_config()
+    config_path = settings.save_config()
 
-    show_success_panel("✅ Configuración Restablecida", "Valores por defecto aplicados")
+    show_success_panel(
+        "✅ Configuración Restablecida", f"Valores por defecto guardados en {config_path}"
+    )
     pause()
 
 
-@app.command()
-def path():
-    """Mostrar rutas de configuración"""
+def show_paths() -> None:
+    """Print configuration paths."""
     settings = _get_settings()
     show_header("📁 RUTAS DE CONFIGURACIÓN")
 
@@ -174,3 +182,32 @@ def path():
     console.print(f"[cyan]Config file:[/cyan] {settings.config_dir / 'config.json'}")
     console.print(f"[cyan]Downloads:[/cyan] {settings.download_path}")
     pause()
+
+
+@app.command("show")
+def show() -> None:
+    """Mostrar configuración actual"""
+    show_config()
+
+
+@app.command("set")
+def set(
+    key: str = typer.Argument(..., help="Clave a modificar"),
+    value: str | None = typer.Argument(None, help="Nuevo valor (interactivo si se omite)"),
+) -> None:
+    """Establecer valor de configuración"""
+    set_config(key, value)
+
+
+@app.command("reset")
+def reset(
+    force: bool = typer.Option(False, "--force", "-f", help="No pedir confirmación"),
+) -> None:
+    """Restablecer configuración por defecto"""
+    reset_config(force)
+
+
+@app.command("path")
+def path() -> None:
+    """Mostrar rutas de configuración"""
+    show_paths()

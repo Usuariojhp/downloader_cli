@@ -31,7 +31,7 @@
 - **Modo Ultra** - aria2c con 16 conexiones paralelas (hasta 10x más rápido)
 - **Modo Normal** - yt-dlp nativo (sin dependencias externas)
 - **Reintentos inteligentes** - Hasta 3 intentos con backoff
-- **Descargas concurrentes** - Hasta 8 en lote
+- **Descargas concurrentes** - Hasta 8 en lote con `--concurrent`
 
 ### 📊 Gestión Avanzada
 - **Historial SQLite** - Registro completo con metadatos
@@ -89,11 +89,11 @@ scoop install aria2 ffmpeg
 
 ### Comandos básicos
 ```bash
-# Descargar video (selector interactivo de calidad)
-media-dl video "https://youtube.com/watch?v=..."
+# Descargar video
+media-dl download video "https://youtube.com/watch?v=..."
 
 # Descargar audio MP3 192kbps
-media-dl audio "https://youtube.com/watch?v=..."
+media-dl download audio "https://youtube.com/watch?v=..."
 
 # Descargar playlist completa
 media-dl playlist "https://youtube.com/playlist?list=..."
@@ -108,15 +108,15 @@ media-dl doctor
 ### Opciones avanzadas
 ```bash
 # Video calidad específica + subtítulos
-media-dl video "URL" --quality 1080 --subs es,en
+media-dl download video "URL" --quality 1080 --subs es,en
 
 # Audio formato original (sin convertir)
-media-dl audio "URL" --format original
+media-dl download audio "URL" --format original
 
-# Descarga por lotes desde archivo
-media-dl download batch urls.txt --type video
+# Descarga por lotes desde archivo (hasta 8 en paralelo)
+media-dl download batch -f urls.txt --type video --concurrent 4
 
-# Playlist solo videos 1-5 y 10
+# Playlist solo videos 1-5 y 10 (o todas con --range all)
 media-dl playlist "URL" --range 1-5,10
 
 # Configurar carpeta de descargas
@@ -150,11 +150,14 @@ media-dl interactive
 ```
 
 ### Variables de entorno
+Tienen prioridad sobre `config.json`.
+
 ```bash
 export MEDIA_DL_DOWNLOAD_PATH=~/Downloads
 export MEDIA_DL_DOWNLOAD_MODE=ultra
 export MEDIA_DL_ARIA2C_CONNECTIONS=32
 export MEDIA_DL_MAX_DOWNLOAD_SPEED=5000  # KB/s
+export MEDIA_DL_CONFIG_DIR=~/.config/media-dl  # dónde vive config.json
 ```
 
 ---
@@ -170,7 +173,7 @@ Options:
   --ultra / --normal    Modo descarga (default: ultra)
   -s, --subs TEXT       Subtítulos (ej: es,en)
   -o, --output PATH     Directorio de salida
-  -f, --force           Forzar descarga aunque exista
+  -F, --force           Forzar descarga aunque exista
 ```
 
 ### `media-dl download audio`
@@ -182,7 +185,7 @@ Options:
   -b, --bitrate [128|192|320]  Bitrate MP3 (default: 192)
   --ultra / --normal           Modo descarga
   -o, --output PATH            Directorio de salida
-  -f, --force                  Forzar descarga
+  -F, --force                  Forzar descarga
 ```
 
 ### `media-dl download batch`
@@ -192,7 +195,7 @@ media-dl download batch [OPTIONS]
 Options:
   -f, --file PATH        Archivo con URLs (una por línea)
   -t, --type [video|audio] Tipo de descarga (default: video)
-  -c, --concurrent INT   Descargas concurrentes (1-8, default: 3)
+  -c, --concurrent INT   Descargas simultáneas (1-8, default: 3)
   --ultra / --normal     Modo descarga
 ```
 
@@ -201,15 +204,18 @@ Options:
 media-dl playlist URL [OPTIONS]
 
 Options:
-  -r, --range TEXT       Rango (ej: 1-5,10,15-20)
+  -r, --range TEXT       Rango (ej: 1-5,10,15-20) o 'all'
   -t, --type [video|audio] Tipo (default: video)
   -f, --format [mp3|original] Formato audio
   -b, --bitrate [128|192|320] Bitrate MP3
+  --ultra / --normal     Modo descarga
+  -o, --output PATH      Directorio de salida
 ```
 
 ### `media-dl history`
 ```bash
 media-dl history [OPTIONS]
+media-dl history clear [--platform P] [--type T] [--force]
 
 Options:
   -l, --limit INT        Límite entradas (default: 20)
@@ -228,8 +234,8 @@ media-dl config path          # Ver rutas
 
 ### `media-dl doctor`
 ```bash
-media-dl doctor [--verbose]   # Diagnóstico sistema
-media-dl update               # Actualizar yt-dlp y deps
+media-dl doctor [--verbose]      # Diagnóstico del sistema
+media-dl doctor update           # Actualizar yt-dlp y dependencias
 ```
 
 ---
@@ -245,7 +251,7 @@ media-dl/
 │   │   ├── models.py        # Pydantic models
 │   │   ├── extractors/      # Extractores por plataforma
 │   │   ├── strategies/      # Estrategias descarga
-│   │   ├── history/         # SQLAlchemy + Repository
+│   │   ├── history/         # sqlite3 + Repository
 │   │   └── progress.py      # Rich progress hooks
 │   ├── ui/                  # Tema cian + componentes
 │   └── cli/commands/        # Comandos Typer
@@ -256,7 +262,7 @@ media-dl/
 ### Patrones de diseño
 - **Extractor Registry** - Prioridad por plataforma (TikTok → tikwn.com)
 - **Strategy Pattern** - aria2c / native intercambiables
-- **Repository Pattern** - Historial tipado con SQLAlchemy 2.0
+- **Repository Pattern** - Historial tipado sobre `sqlite3` (stdlib)
 - **Settings Management** - Pydantic Settings v2 (JSON + env)
 
 ---
@@ -268,11 +274,24 @@ media-dl/
 pytest
 
 # Con coverage
-pytest --cov=src/media_dl
+pytest --cov=src/media_dl --cov-report=term-missing
 
 # Solo tests unitarios
 pytest tests/test_models.py tests/test_strategies.py
 ```
+
+La suite aísla `MEDIA_DL_CONFIG_DIR` en un directorio temporal, así que nunca
+toca tu `~/.config/media-dl` real.
+
+### Estado de la verificación
+
+| Comprobación | Estado |
+|---|---|
+| `pytest` | 137 tests, todos en verde |
+| `ruff check .` | 0 errores |
+| `ruff format --check .` | 0 diferencias |
+| `mypy src/` (strict) | 0 errores |
+| `pyinstaller` | binario portable verificado |
 
 ---
 
@@ -286,8 +305,8 @@ pytest tests/test_models.py tests/test_strategies.py
 # Windows
 build\build.bat
 
-# O manual
-pyinstaller --clean --onefile --name media-dl src/media_dl/main.py
+# O manual (usa el spec del repo)
+pyinstaller --clean --noconfirm build/media_dl.spec
 ```
 
 ### PyPI Package
@@ -336,7 +355,7 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 - **Rich** - Interfaz de terminal hermosa
 - **Typer** - CLI framework moderno
 - **Pydantic** - Validación de datos
-- **SQLAlchemy** - ORM para historial
+- **sqlite3** - Historial de descargas (stdlib)
 - **aria2** - Descargador ultra rápido
 - **FFmpeg** - Procesamiento multimedia
 

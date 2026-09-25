@@ -5,12 +5,13 @@ __pycache__/
 
 # Distribution / packaging
 dist/
-build/
 *.egg-info/
 *.egg
 
-# PyInstaller
-*.spec
+# PyInstaller (los scripts de build/ SI se versionan)
+build/media-dl/
+build/media_dl/
+*.spec.bak
 
 # Virtual environments
 venv/

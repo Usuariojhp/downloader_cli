@@ -1,18 +1,14 @@
 """Tests for history repository."""
 
-import pytest
 import hashlib
-from pathlib import Path
 
-from media_dl.core.history import HistoryRepository, DownloadHistory
-from media_dl.config import Settings
-from media_dl.core.exceptions import HistoryError
+from media_dl.core.history import HistoryRepository
 
 
 class TestHistoryRepository:
     def test_init_creates_tables(self, temp_dir):
         db_path = temp_dir / "test.db"
-        repo = HistoryRepository(db_path)
+        HistoryRepository(db_path)
         assert db_path.exists()
 
     def test_add_and_get_by_url_hash(self, history_repo):
@@ -143,13 +139,21 @@ class TestHistoryRepository:
     def test_count(self, history_repo):
         history_repo.add(
             url="https://test.com/v1",
-            title="V1", platform="YouTube", media_type="video",
-            quality="1080p", file_path="/tmp/v1.mp4", file_size=1000,
+            title="V1",
+            platform="YouTube",
+            media_type="video",
+            quality="1080p",
+            file_path="/tmp/v1.mp4",
+            file_size=1000,
         )
         history_repo.add(
             url="https://test.com/v2",
-            title="V2", platform="YouTube", media_type="video",
-            quality="720p", file_path="/tmp/v2.mp4", file_size=2000,
+            title="V2",
+            platform="YouTube",
+            media_type="video",
+            quality="720p",
+            file_path="/tmp/v2.mp4",
+            file_size=2000,
         )
 
         assert history_repo.count() == 2
@@ -159,13 +163,21 @@ class TestHistoryRepository:
     def test_clear(self, history_repo):
         history_repo.add(
             url="https://test.com/v1",
-            title="V1", platform="YouTube", media_type="video",
-            quality="1080p", file_path="/tmp/v1.mp4", file_size=1000,
+            title="V1",
+            platform="YouTube",
+            media_type="video",
+            quality="1080p",
+            file_path="/tmp/v1.mp4",
+            file_size=1000,
         )
         history_repo.add(
             url="https://test.com/v2",
-            title="V2", platform="TikTok", media_type="video",
-            quality="720p", file_path="/tmp/v2.mp4", file_size=2000,
+            title="V2",
+            platform="TikTok",
+            media_type="video",
+            quality="720p",
+            file_path="/tmp/v2.mp4",
+            file_size=2000,
         )
 
         # Clear all
@@ -176,8 +188,12 @@ class TestHistoryRepository:
         # Re-add
         history_repo.add(
             url="https://test.com/v3",
-            title="V3", platform="YouTube", media_type="video",
-            quality="1080p", file_path="/tmp/v3.mp4", file_size=1000,
+            title="V3",
+            platform="YouTube",
+            media_type="video",
+            quality="1080p",
+            file_path="/tmp/v3.mp4",
+            file_size=1000,
         )
 
         # Clear only YouTube
@@ -188,18 +204,30 @@ class TestHistoryRepository:
     def test_get_stats(self, history_repo):
         history_repo.add(
             url="https://youtube.com/v1",
-            title="V1", platform="YouTube", media_type="video",
-            quality="1080p", file_path="/tmp/v1.mp4", file_size=1000000,
+            title="V1",
+            platform="YouTube",
+            media_type="video",
+            quality="1080p",
+            file_path="/tmp/v1.mp4",
+            file_size=1000000,
         )
         history_repo.add(
             url="https://youtube.com/v2",
-            title="V2", platform="YouTube", media_type="audio",
-            quality="mp3 192kbps", file_path="/tmp/v2.mp3", file_size=5000000,
+            title="V2",
+            platform="YouTube",
+            media_type="audio",
+            quality="mp3 192kbps",
+            file_path="/tmp/v2.mp3",
+            file_size=5000000,
         )
         history_repo.add(
             url="https://tiktok.com/v3",
-            title="V3", platform="TikTok", media_type="video",
-            quality="720p", file_path="/tmp/v3.mp4", file_size=2000000,
+            title="V3",
+            platform="TikTok",
+            media_type="video",
+            quality="720p",
+            file_path="/tmp/v3.mp4",
+            file_size=2000000,
         )
 
         stats = history_repo.get_stats()

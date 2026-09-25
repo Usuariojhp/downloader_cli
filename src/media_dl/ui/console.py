@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
+import sys
+
 from rich.console import Console
-from rich.theme import Theme
 
 from media_dl.ui.theme import CYAN_THEME
 
-
 _console_instance: Console | None = None
+
+
+def is_interactive() -> bool:
+    """Return True only when stdin is attached to a real terminal."""
+    stdin = sys.stdin
+    if stdin is None:
+        return False
+    try:
+        return bool(stdin.isatty())
+    except (AttributeError, ValueError):
+        return False
 
 
 def get_console() -> Console:

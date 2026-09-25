@@ -2,37 +2,36 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-from rich.console import Console
+from typing import Any
+
 from rich.table import Table
-from rich.box import ROUNDED
 from rich.text import Text
 
+from media_dl.core.history.models import DownloadHistory
+from media_dl.core.models import Format, MediaInfo, PlaylistEntry
 from media_dl.ui.console import get_console
 from media_dl.ui.theme import (
-    TABLE_BOX, TABLE_BORDER_STYLE, TABLE_HEADER_STYLE,
-    STYLE_SUCCESS, STYLE_WARNING, STYLE_ERROR, STYLE_MUTED,
+    TABLE_BOX,
+    TABLE_HEADER_STYLE,
 )
-from media_dl.core.models import MediaInfo, Format, PlaylistEntry, DownloadResult
-from media_dl.core.history.models import DownloadHistory
-
 
 console = get_console()
 
 
-def format_size(size: Optional[int]) -> str:
+def format_size(size: int | None) -> str:
     """Format file size in human readable format."""
     if size is None or size == 0:
         return "Desconocido"
 
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size < 1024.0:
-            return f"{size:.2f} {unit}"
-        size /= 1024.0
-    return f"{size:.2f} PB"
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024.0:
+            return f"{value:.2f} {unit}"
+        value /= 1024.0
+    return f"{value:.2f} PB"
 
 
-def format_duration(seconds: Optional[int]) -> str:
+def format_duration(seconds: int | None) -> str:
     """Format duration as human readable string."""
     if not seconds:
         return "N/A"
@@ -75,7 +74,7 @@ def create_media_info_table(info: MediaInfo) -> Table:
     return table
 
 
-def create_format_table(formats: List[Format], media_type: str = "video") -> Table:
+def create_format_table(formats: list[Format], media_type: str = "video") -> Table:
     """Create table with available formats."""
     table = Table(
         show_header=True,
@@ -96,7 +95,11 @@ def create_format_table(formats: List[Format], media_type: str = "video") -> Tab
 
         video_formats = [f for f in formats if f.is_video]
         for idx, f in enumerate(video_formats, 1):
-            size = format_size(f.filesize or f.filesize_approx) if f.filesize or f.filesize_approx else "N/A"
+            size = (
+                format_size(f.filesize or f.filesize_approx)
+                if f.filesize or f.filesize_approx
+                else "N/A"
+            )
             table.add_row(
                 str(idx),
                 f.resolution or f"{f.height}p" if f.height else "N/A",
@@ -116,7 +119,11 @@ def create_format_table(formats: List[Format], media_type: str = "video") -> Tab
 
         audio_formats = [f for f in formats if f.is_audio and not f.is_video]
         for idx, f in enumerate(audio_formats, 1):
-            size = format_size(f.filesize or f.filesize_approx) if f.filesize or f.filesize_approx else "N/A"
+            size = (
+                format_size(f.filesize or f.filesize_approx)
+                if f.filesize or f.filesize_approx
+                else "N/A"
+            )
             table.add_row(
                 str(idx),
                 f.ext,
@@ -128,7 +135,7 @@ def create_format_table(formats: List[Format], media_type: str = "video") -> Tab
     return table
 
 
-def create_history_table(history: List[DownloadHistory], limit: int = 20) -> Table:
+def create_history_table(history: list[DownloadHistory], limit: int = 20) -> Table:
     """Create table with download history."""
     table = Table(
         show_header=True,
@@ -151,13 +158,13 @@ def create_history_table(history: List[DownloadHistory], limit: int = 20) -> Tab
             record.platform,
             record.media_type,
             format_size(record.file_size),
-            record.download_date.strftime("%Y-%m-%d %H:%M"),
+            record.download_date.strftime("%Y-%m-%d %H:%M") if record.download_date else "N/A",
         )
 
     return table
 
 
-def create_config_table(config: dict) -> Table:
+def create_config_table(config: dict[str, Any]) -> Table:
     """Create table with configuration settings."""
     table = Table(
         show_header=False,
@@ -181,7 +188,11 @@ def create_config_table(config: dict) -> Table:
         ("8", "Intentos de reintento", str(config.get("retry_attempts", 3))),
         ("9", "Verificar duplicados", str(config.get("check_duplicates", True))),
         ("10", "Conexiones Aria2c", str(config.get("aria2c_connections", 16))),
-        ("11", "Límite velocidad (KB/s)", str(config.get("max_download_speed", 0)) + " (0=sin límite)"),
+        (
+            "11",
+            "Límite velocidad (KB/s)",
+            str(config.get("max_download_speed", 0)) + " (0=sin límite)",
+        ),
         ("12", "Descargas concurrentes", str(config.get("concurrent_downloads", 3))),
         ("0", "[red]Volver[/red]", ""),
     ]
@@ -225,7 +236,7 @@ def create_system_info_table(
     return table
 
 
-def create_stats_table(stats: dict) -> Table:
+def create_stats_table(stats: dict[str, Any]) -> Table:
     """Create statistics table."""
     table = Table(
         show_header=True,
@@ -256,7 +267,7 @@ def create_stats_table(stats: dict) -> Table:
     return table
 
 
-def create_playlist_table(entries: List[PlaylistEntry], selected_range: Optional[str] = None) -> Table:
+def create_playlist_table(entries: list[PlaylistEntry], selected_range: str | None = None) -> Table:
     """Create playlist entries table."""
     table = Table(
         show_header=True,
@@ -282,7 +293,9 @@ def create_playlist_table(entries: List[PlaylistEntry], selected_range: Optional
             str(idx),
             Text(title, style=style),
             format_duration(entry.duration),
-            (entry.uploader[:17] + "...") if entry.uploader and len(entry.uploader) > 20 else (entry.uploader or ""),
+            (entry.uploader[:17] + "...")
+            if entry.uploader and len(entry.uploader) > 20
+            else (entry.uploader or ""),
             style=style,
         )
 

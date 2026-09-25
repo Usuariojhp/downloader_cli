@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Optional
 import asyncio
-import subprocess
 import json
+import subprocess
+from typing import Any, ClassVar
 
-from media_dl.core.extractors.base import Extractor, register_extractor
-from media_dl.core.models import MediaInfo, Format, PlaylistEntry
 from media_dl.core.exceptions import ExtractorError
+from media_dl.core.extractors.base import Extractor, register_extractor
+from media_dl.core.models import Format, MediaInfo, PlaylistEntry
 
-
-_scdl_available: Optional[bool] = None
+_scdl_available: bool | None = None
 
 
 def check_scdl() -> bool:
@@ -21,7 +20,7 @@ def check_scdl() -> bool:
     if _scdl_available is None:
         try:
             # Check if scdl command exists
-            result = subprocess.run(["scdl", "--version"], capture_output=True)
+            result = subprocess.run(["scdl", "--version"], capture_output=True, check=False)
             _scdl_available = result.returncode == 0
         except FileNotFoundError:
             _scdl_available = False
@@ -33,7 +32,7 @@ class SoundCloudExtractor(Extractor):
     """SoundCloud extractor using scdl CLI."""
 
     name = "soundcloud"
-    domains = ["soundcloud.com", "m.soundcloud.com"]
+    domains: ClassVar[list[str]] = ["soundcloud.com", "m.soundcloud.com"]
     priority = 90
 
     def can_handle(self, url: str) -> bool:
@@ -63,11 +62,14 @@ class SoundCloudExtractor(Extractor):
                 ["scdl", "-l", url, "--json", "--no-download"],
                 capture_output=True,
                 text=True,
+                check=False,
                 timeout=60,
             )
 
             if result.returncode != 0:
-                raise ExtractorError(f"scdl failed: {result.stderr}", url=url, platform="SoundCloud")
+                raise ExtractorError(
+                    f"scdl failed: {result.stderr}", url=url, platform="SoundCloud"
+                )
 
             # Parse JSON output
             tracks = []
@@ -87,12 +89,14 @@ class SoundCloudExtractor(Extractor):
             else:
                 return self._parse_track(tracks[0], url)
 
-        except subprocess.TimeoutExpired:
-            raise ExtractorError("scdl timed out", url=url, platform="SoundCloud")
+        except subprocess.TimeoutExpired as e:
+            raise ExtractorError("scdl timed out", url=url, platform="SoundCloud") from e
         except Exception as e:
-            raise ExtractorError(f"SoundCloud extraction failed: {e}", url=url, platform="SoundCloud", cause=e)
+            raise ExtractorError(
+                f"SoundCloud extraction failed: {e}", url=url, platform="SoundCloud", cause=e
+            ) from e
 
-    def _parse_track(self, track: dict, url: str) -> MediaInfo:
+    def _parse_track(self, track: dict[str, Any], url: str) -> MediaInfo:
         """Parse single track."""
         format_obj = Format(
             format_id="soundcloud_best",
@@ -116,7 +120,7 @@ class SoundCloudExtractor(Extractor):
             is_playlist=False,
         )
 
-    def _parse_playlist(self, tracks: list, url: str) -> MediaInfo:
+    def _parse_playlist(self, tracks: list[Any], url: str) -> MediaInfo:
         """Parse playlist/set."""
         entries = []
         total_duration = 0
@@ -134,21 +138,24 @@ class SoundCloudExtractor(Extractor):
             if duration:
                 total_duration += duration
 
-            entries.append(PlaylistEntry(
-                id=str(track.get("id", f"track_{idx}")),
-                title=track.get("title", "Unknown"),
-                url=track.get("permalink_url") or url,
-                duration=duration,
-                thumbnail=track.get("artwork_url") or track.get("user", {}).get("avatar_url"),
-                uploader=track.get("user", {}).get("username"),
-                index=idx,
-                formats=[format_obj],
-            ))
+            entries.append(
+                PlaylistEntry(
+                    id=str(track.get("id", f"track_{idx}")),
+                    title=track.get("title", "Unknown"),
+                    url=track.get("permalink_url") or url,
+                    duration=duration,
+                    thumbnail=track.get("artwork_url") or track.get("user", {}).get("avatar_url"),
+                    uploader=track.get("user", {}).get("username"),
+                    index=idx,
+                    formats=[format_obj],
+                )
+            )
 
         first_track = tracks[0] if tracks else {}
         return MediaInfo(
             id=str(first_track.get("playlist_id", first_track.get("id", ""))),
-            title=first_track.get("playlist_title") or first_track.get("title", "SoundCloud Playlist"),
+            title=first_track.get("playlist_title")
+            or first_track.get("title", "SoundCloud Playlist"),
             url=url,
             platform="SoundCloud",
             uploader=first_track.get("user", {}).get("username"),

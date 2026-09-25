@@ -1,8 +1,8 @@
 """Default configuration values."""
 
 from pathlib import Path
-import platformdirs
 
+import platformdirs
 
 DEFAULT_DOWNLOAD_PATH = Path("./downloads")
 DEFAULT_CONFIG_DIR = Path(platformdirs.user_config_dir("media-dl"))

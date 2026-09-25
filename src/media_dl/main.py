@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import sys
-import typer
-from rich.console import Console
 
-from media_dl.config import get_settings, reset_settings
-from media_dl.ui import get_console, show_header, show_error_panel
+import typer
+
 from media_dl.cli.commands import (
-    download_app,
-    playlist_app,
-    history_app,
     config_app,
     doctor_app,
+    download_app,
+    history_app,
+    playlist,
 )
+from media_dl.config import get_settings
+from media_dl.ui import get_console, show_error_panel, show_header
 
 app = typer.Typer(
     name="media-dl",
@@ -24,9 +24,11 @@ app = typer.Typer(
     add_completion=True,
 )
 
+console = get_console()
+
 # Add subcommands
 app.add_typer(download_app, name="download")
-app.add_typer(playlist_app, name="playlist")
+app.command("playlist")(playlist)
 app.add_typer(history_app, name="history")
 app.add_typer(config_app, name="config")
 app.add_typer(doctor_app, name="doctor")
@@ -36,7 +38,7 @@ app.add_typer(doctor_app, name="doctor")
 def main(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", "-v", help="Mostrar versión"),
-):
+) -> None:
     """
     media-dl - Unified Media Downloader
 
@@ -52,9 +54,9 @@ def main(
     """
     if version:
         from media_dl import __version__
-        console = get_console()
+
         console.print(f"[bold cyan]media-dl[/bold cyan] v{__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
     # Initialize settings on first run
     if ctx.invoked_subcommand is None:
@@ -64,17 +66,15 @@ def main(
 
 
 @app.command()
-def interactive():
+def interactive() -> None:
     """Modo interactivo con menús"""
-    from media_dl.ui import show_main_menu, prompt_yes_no, pause
-    from media_dl.cli.commands.download import download_video, download_audio, download_batch
-    from media_dl.cli.commands.playlist import playlist
-    from media_dl.cli.commands.history import history, clear
-    from media_dl.cli.commands.config import show, set, reset, path
-    from media_dl.cli.commands.doctor import doctor
+    from media_dl.cli.commands.config import reset_config, set_config, show_config, show_paths
+    from media_dl.cli.commands.doctor import run_doctor
+    from media_dl.cli.commands.download import run_audio, run_batch, run_video
+    from media_dl.cli.commands.history import show_history
+    from media_dl.ui import pause, prompt_yes_no, show_main_menu
 
     settings = get_settings()
-    console = get_console()
 
     while True:
         try:
@@ -83,18 +83,23 @@ def interactive():
             if choice == "1":
                 url = typer.prompt("\n[prompt]📺 Pega la URL del VIDEO[/prompt]").strip()
                 if url:
-                    download_video.callback(url=url)
+                    run_video(url=url, ultra=settings.download_mode == "ultra")
 
             elif choice == "2":
                 url = typer.prompt("\n[prompt]🎵 Pega la URL del AUDIO[/prompt]").strip()
                 if url:
-                    download_audio.callback(url=url)
+                    run_audio(
+                        url=url,
+                        audio_format=settings.default_audio_format,
+                        bitrate=settings.default_audio_bitrate,
+                        ultra=settings.download_mode == "ultra",
+                    )
 
             elif choice == "3":
-                download_batch.callback()
+                run_batch(media_type="video", ultra=settings.download_mode == "ultra")
 
             elif choice == "4":
-                history.callback()
+                show_history()
 
             elif choice == "5":
                 while True:
@@ -108,19 +113,19 @@ def interactive():
 
                     opt = typer.prompt("[prompt]Selecciona[/prompt]", type=int)
                     if opt == 1:
-                        show.callback()
+                        show_config()
                     elif opt == 2:
                         key = typer.prompt("[prompt]Clave[/prompt]")
-                        set.callback(key=key)
+                        set_config(key)
                     elif opt == 3:
-                        reset.callback()
+                        reset_config()
                     elif opt == 4:
-                        path.callback()
+                        show_paths()
                     elif opt == 0:
                         break
 
             elif choice == "6":
-                doctor.callback()
+                run_doctor()
 
             elif choice == "0":
                 console.print("\n[bold green]👋 ¡Hasta luego![/bold green]")
@@ -133,20 +138,20 @@ def interactive():
             console.print("\n[yellow]⚠️ Interrumpido por el usuario[/yellow]")
             if prompt_yes_no("¿Salir?", default=True):
                 break
+        except typer.Exit:
+            continue
         except Exception as e:
             show_error_panel("Error", f"{type(e).__name__}: {e}")
 
 
-def cli_main():
+def cli_main() -> None:
     """Entry point for console script."""
     try:
         app()
     except KeyboardInterrupt:
-        console = get_console()
         console.print("\n[yellow]⚠️ Interrumpido[/yellow]")
         sys.exit(130)
     except Exception as e:
-        console = get_console()
         show_error_panel("Error Crítico", f"{type(e).__name__}: {e}")
         sys.exit(1)
 

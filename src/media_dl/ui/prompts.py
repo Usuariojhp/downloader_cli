@@ -2,45 +2,59 @@
 
 from __future__ import annotations
 
-from typing import Optional, List
 from pathlib import Path
-from rich.prompt import Prompt, Confirm
-from rich.console import Console
+from typing import Any
 
-from media_dl.ui.console import get_console
-from media_dl.ui.theme import STYLE_PROMPT, STYLE_ERROR
+from rich.prompt import Confirm, Prompt
+
 from media_dl.core.exceptions import ValidationError
-
+from media_dl.ui.console import get_console, is_interactive
 
 console = get_console()
+
+
+def _ask(prompt: str, default: str = "", **kwargs: Any) -> str:
+    """Prompt for input, falling back to ``default`` when stdin is not a terminal."""
+    if not is_interactive():
+        return default
+    try:
+        return Prompt.ask(prompt, default=default, **kwargs)
+    except (EOFError, KeyboardInterrupt):
+        return default
 
 
 def prompt_url(prompt_text: str = "URL del video/playlist") -> str:
     """Prompt for URL with basic validation."""
     while True:
-        url = Prompt.ask(f"[prompt]{prompt_text}[/prompt]").strip()
+        if not is_interactive():
+            raise ValidationError(
+                "Se requiere una terminal interactiva para introducir la URL", field="url"
+            )
+        url = _ask(f"[prompt]{prompt_text}[/prompt]").strip()
         if not url:
             console.print("[error]La URL no puede estar vacía[/error]")
             continue
 
         # Basic URL validation
-        if not (url.startswith("http://") or url.startswith("https://")):
+        if not url.startswith(("http://", "https://")):
             console.print("[error]La URL debe empezar con http:// o https://[/error]")
             continue
 
         return url
 
 
-def prompt_urls_batch(prompt_text: str = "Pega las URLs (una por línea, línea vacía para terminar)") -> List[str]:
+def prompt_urls_batch(
+    prompt_text: str = "Pega las URLs (una por línea, línea vacía para terminar)",
+) -> list[str]:
     """Prompt for multiple URLs."""
     urls = []
     console.print(f"[dim]{prompt_text}[/dim]")
 
     while True:
-        url = Prompt.ask("[prompt]URL[/prompt]", default="").strip()
+        url = _ask("[prompt]URL[/prompt]", default="").strip()
         if not url:
             break
-        if url.startswith("http://") or url.startswith("https://"):
+        if url.startswith(("http://", "https://")):
             urls.append(url)
         else:
             console.print("[warning]URL ignorada (formato inválido): " + url[:50])
@@ -55,10 +69,14 @@ def prompt_file_path(
 ) -> str:
     """Prompt for file path."""
     while True:
-        path = Prompt.ask(f"[prompt]{prompt_text}[/prompt]", default=default).strip()
+        path = _ask(f"[prompt]{prompt_text}[/prompt]", default=default).strip()
         if not path:
             if default:
                 return default
+            if not is_interactive():
+                raise ValidationError(
+                    "Se requiere una terminal interactiva para introducir la ruta", field="path"
+                )
             console.print("[error]La ruta no puede estar vacía[/error]")
             continue
 
@@ -78,10 +96,14 @@ def prompt_directory(
 ) -> str:
     """Prompt for directory path."""
     while True:
-        path = Prompt.ask(f"[prompt]{prompt_text}[/prompt]", default=default).strip()
+        path = _ask(f"[prompt]{prompt_text}[/prompt]", default=default).strip()
         if not path:
             if default:
                 return default
+            if not is_interactive():
+                raise ValidationError(
+                    "Se requiere una terminal interactiva para introducir la ruta", field="path"
+                )
             console.print("[error]La ruta no puede estar vacía[/error]")
             continue
 
@@ -97,7 +119,7 @@ def prompt_directory(
         return str(path_obj)
 
 
-def prompt_quality(available: List[str], default: str = "auto") -> str:
+def prompt_quality(available: list[str], default: str = "auto") -> str:
     """Prompt for video quality selection."""
     console.print("\n[bold cyan]📊 CALIDADES DISPONIBLES[/bold cyan]")
 
@@ -108,8 +130,9 @@ def prompt_quality(available: List[str], default: str = "auto") -> str:
     console.print(f"  {len(available) + 1}. [yellow]Mejor calidad automática[/yellow]")
 
     while True:
-        choice = Prompt.ask(
+        choice = _ask(
             "[prompt]Elige calidad[/prompt]",
+            default=str(len(available) + 1),
             choices=[str(i) for i in range(1, len(available) + 2)],
             show_choices=False,
         )
@@ -126,8 +149,9 @@ def prompt_audio_format() -> str:
     console.print("  1. [green]Formato Original[/green] (Más rápido, sin recodificar)")
     console.print("  2. [yellow]Convertir a MP3[/yellow]")
 
-    choice = Prompt.ask(
+    choice = _ask(
         "[prompt]Elige opción[/prompt]",
+        default="1",
         choices=["1", "2"],
         show_choices=False,
     )
@@ -141,34 +165,39 @@ def prompt_audio_bitrate() -> int:
     console.print("  2. [yellow]192 kbps[/yellow] (Media - Recomendado)")
     console.print("  3. [red]128 kbps[/red] (Baja)")
 
-    choice = Prompt.ask(
+    choice = _ask(
         "[prompt]Elige calidad[/prompt]",
+        default="2",
         choices=["1", "2", "3"],
         show_choices=False,
     )
     return {"1": 320, "2": 192, "3": 128}[choice]
 
 
-def prompt_subtitle_languages(default: List[str] = None) -> List[str]:
+def prompt_subtitle_languages(default: list[str] | None = None) -> list[str]:
     """Prompt for subtitle languages."""
     default = default or ["es", "en"]
-    langs = Prompt.ask(
+    langs = _ask(
         "[prompt]Idiomas (separados por coma, ej: es,en,fr)[/prompt]",
         default=",".join(default),
     ).strip()
 
-    return [l.strip().lower() for l in langs.split(",") if l.strip()]
+    return [lang.strip().lower() for lang in langs.split(",") if lang.strip()]
 
 
-def prompt_playlist_range(total: int) -> Optional[str]:
+def prompt_playlist_range(total: int) -> str | None:
     """Prompt for playlist range selection."""
     console.print(f"\n[bold]Total videos: {total}[/bold]")
     console.print("[dim]Ejemplos: 1-5, 10, 15-20  |  'all' para todos[/dim]")
 
-    range_input = Prompt.ask(
-        "[prompt]Rango a descargar[/prompt]",
-        default="all",
-    ).strip().lower()
+    range_input = (
+        _ask(
+            "[prompt]Rango a descargar[/prompt]",
+            default="all",
+        )
+        .strip()
+        .lower()
+    )
 
     if range_input in ("all", "todo", "*", ""):
         return None
@@ -182,35 +211,36 @@ def prompt_playlist_range(total: int) -> Optional[str]:
         return prompt_playlist_range(total)
 
 
-def parse_range(range_str: str, max_val: int) -> List[int]:
-    """Parse range string like '1-5,10,15-20' into list of indices (0-based)."""
-    indices = []
-    parts = range_str.split(",")
+def parse_range(range_str: str, max_val: int) -> list[int] | None:
+    """Parse range string like '1-5,10,15-20' into list of indices (0-based).
 
-    for part in parts:
-        part = part.strip()
+    Returns None when the whole collection is selected ('all', 'todo', '*').
+    """
+    if range_str.strip().lower() in ("all", "todo", "*"):
+        return None
+
+    indices: list[int] = []
+
+    for part in (raw.strip() for raw in range_str.split(",")):
         if not part:
             continue
 
         if "-" in part:
-            try:
-                start, end = part.split("-", 1)
-                start_idx = int(start.strip()) - 1
-                end_idx = int(end.strip())
-                if start_idx < 0 or end_idx > max_val or start_idx >= end_idx:
-                    raise ValueError(f"Rango inválido: {part}")
-                indices.extend(range(start_idx, end_idx))
-            except ValueError:
+            start_raw, _, end_raw = part.partition("-")
+            if not (start_raw.strip().isdigit() and end_raw.strip().isdigit()):
                 raise ValueError(f"Formato de rango inválido: {part}")
+            start_idx = int(start_raw) - 1
+            end_idx = int(end_raw)
+            if start_idx < 0 or end_idx > max_val or start_idx >= end_idx:
+                raise ValueError(f"Formato de rango inválido: {part}")
+            indices.extend(range(start_idx, end_idx))
         else:
-            try:
-                idx = int(part) - 1
-                if 0 <= idx < max_val:
-                    indices.append(idx)
-                else:
-                    raise ValueError(f"Índice fuera de rango: {part}")
-            except ValueError:
+            if not part.isdigit():
                 raise ValueError(f"Índice inválido: {part}")
+            idx = int(part) - 1
+            if not 0 <= idx < max_val:
+                raise ValueError(f"Índice inválido: {part}")
+            indices.append(idx)
 
     # Remove duplicates and sort
     return sorted(set(indices))
@@ -218,19 +248,24 @@ def parse_range(range_str: str, max_val: int) -> List[int]:
 
 def prompt_yes_no(prompt_text: str, default: bool = False) -> bool:
     """Prompt for yes/no confirmation."""
-    return Confirm.ask(f"[prompt]{prompt_text}[/prompt]", default=default)
+    if not is_interactive():
+        return default
+    try:
+        return Confirm.ask(f"[prompt]{prompt_text}[/prompt]", default=default)
+    except (EOFError, KeyboardInterrupt):
+        return default
 
 
 def prompt_int_range(
     prompt_text: str,
     min_val: int,
     max_val: int,
-    default: Optional[int] = None,
+    default: int | None = None,
 ) -> int:
     """Prompt for integer within range."""
     while True:
         default_str = str(default) if default is not None else ""
-        val = Prompt.ask(
+        val = _ask(
             f"[prompt]{prompt_text}[/prompt]",
             default=default_str,
         ).strip()
@@ -258,7 +293,7 @@ def prompt_config_value(key: str, current: str, value_type: str = "string") -> s
     }
 
     hint = type_hints.get(value_type, "")
-    new_val = Prompt.ask(
+    new_val = _ask(
         f"[prompt]{key}[/prompt]{hint} [dim](actual: {current})[/dim]",
         default=current,
     ).strip()
@@ -270,9 +305,16 @@ def prompt_config_value(key: str, current: str, value_type: str = "string") -> s
             console.print("[error]Debe ser un número entero[/error]")
             return prompt_config_value(key, current, value_type)
 
-    elif value_type == "bool":
-        if new_val.lower() not in ("s", "n", "si", "no", "yes", "no", "true", "false"):
-            console.print("[error]Debe ser s/n o true/false[/error]")
-            return prompt_config_value(key, current, value_type)
+    elif value_type == "bool" and new_val.lower() not in (
+        "s",
+        "n",
+        "si",
+        "no",
+        "yes",
+        "true",
+        "false",
+    ):
+        console.print("[error]Debe ser s/n o true/false[/error]")
+        return prompt_config_value(key, current, value_type)
 
     return new_val

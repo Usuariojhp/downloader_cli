@@ -1,13 +1,10 @@
 """Tests for core models."""
 
-import pytest
 from media_dl.core.models import (
-    Format,
-    Thumbnail,
-    PlaylistEntry,
-    MediaInfo,
     DownloadRequest,
     DownloadResult,
+    Format,
+    PlaylistEntry,
 )
 
 

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional, List, Dict, Any
+from typing import Any, ClassVar, cast
+
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError as YTDLPError
 
-from media_dl.core.extractors.base import Extractor, register_extractor
-from media_dl.core.models import MediaInfo, Format, Thumbnail, PlaylistEntry
 from media_dl.core.exceptions import ExtractorError
+from media_dl.core.extractors.base import Extractor, register_extractor
+from media_dl.core.models import Format, MediaInfo, PlaylistEntry, Thumbnail
 
 
 @register_extractor
@@ -17,7 +18,7 @@ class YTDLPExtractor(Extractor):
     """Universal extractor using yt-dlp."""
 
     name = "yt-dlp"
-    domains = [
+    domains: ClassVar[list[str]] = [
         "youtube.com",
         "youtu.be",
         "instagram.com",
@@ -38,12 +39,12 @@ class YTDLPExtractor(Extractor):
     ]
     priority = 10
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._base_opts = {
             "quiet": True,
             "no_warnings": True,
-            "extract_flat": False,
+            "extract_flat": "in_playlist",
             "skip_download": True,
             "http_headers": {
                 "User-Agent": (
@@ -67,46 +68,50 @@ class YTDLPExtractor(Extractor):
 
         return self._parse_info(info, url)
 
-    def _extract_sync(self, url: str) -> dict:
+    def _extract_sync(self, url: str) -> dict[str, Any]:
         """Synchronous extraction."""
         opts = {**self._base_opts}
         try:
-            with YoutubeDL(opts) as ydl:
-                return ydl.extract_info(url, download=False)
+            with YoutubeDL(opts) as ydl:  # type: ignore[no-untyped-call]
+                return cast("dict[str, Any]", ydl.extract_info(url, download=False))
         except YTDLPError as e:
-            raise ExtractorError(f"yt-dlp extraction failed: {e}", url=url, platform=self.name, cause=e)
+            raise ExtractorError(
+                f"yt-dlp extraction failed: {e}", url=url, platform=self.name, cause=e
+            ) from e
         except Exception as e:
-            raise ExtractorError(f"Unexpected extraction error: {e}", url=url, platform=self.name, cause=e)
+            raise ExtractorError(
+                f"Unexpected extraction error: {e}", url=url, platform=self.name, cause=e
+            ) from e
 
-    def _parse_info(self, info: dict, original_url: str) -> MediaInfo:
+    def _parse_info(self, info: dict[str, Any], original_url: str) -> MediaInfo:
         """Parse yt-dlp info dict to MediaInfo."""
         if not info:
             raise ExtractorError("No info extracted", url=original_url, platform=self.name)
 
         # Handle playlists
-        entries = []
-        is_playlist = "entries" in info and info["entries"]
+        is_playlist = bool(info.get("entries"))
         playlist_title = info.get("title") if is_playlist else None
+        entries = (
+            [
+                self._parse_entry(entry, idx + 1)
+                for idx, entry in enumerate(info["entries"] or [])
+                if entry
+            ]
+            if is_playlist
+            else []
+        )
 
-        if is_playlist:
-            for idx, entry in enumerate(info["entries"] or []):
-                if entry:
-                    entries.append(self._parse_entry(entry, idx + 1))
-
-        # Parse formats
-        formats = []
-        for f in info.get("formats", []) or []:
-            formats.append(self._parse_format(f))
-
-        # Parse thumbnails
-        thumbnails = []
-        for t in info.get("thumbnails", []) or []:
-            thumbnails.append(Thumbnail(
+        # Parse formats and thumbnails
+        formats = [self._parse_format(f) for f in info.get("formats") or []]
+        thumbnails = [
+            Thumbnail(
                 url=t.get("url", ""),
                 width=t.get("width"),
                 height=t.get("height"),
                 resolution=t.get("resolution"),
-            ))
+            )
+            for t in info.get("thumbnails") or []
+        ]
 
         return MediaInfo(
             id=info.get("id", ""),
@@ -125,8 +130,8 @@ class YTDLPExtractor(Extractor):
             formats=formats,
             subtitles=info.get("subtitles", {}),
             automatic_captions=info.get("automatic_captions", {}),
-            tags=info.get("tags", []),
-            categories=info.get("categories", []),
+            tags=info.get("tags") or [],
+            categories=info.get("categories") or [],
             age_limit=info.get("age_limit"),
             is_live=info.get("is_live", False),
             was_live=info.get("was_live", False),
@@ -139,16 +144,16 @@ class YTDLPExtractor(Extractor):
             entries=entries,
         )
 
-    def _parse_entry(self, entry: dict, index: int) -> PlaylistEntry:
+    def _parse_entry(self, entry: dict[str, Any], index: int) -> PlaylistEntry:
         """Parse playlist entry."""
-        formats = []
-        for f in entry.get("formats", []) or []:
-            formats.append(self._parse_format(f))
+        formats = [self._parse_format(f) for f in entry.get("formats") or []]
 
         return PlaylistEntry(
             id=entry.get("id", ""),
             title=entry.get("title", "Unknown"),
-            url=entry.get("url") or entry.get("webpage_url") or f"https://www.youtube.com/watch?v={entry.get('id')}",
+            url=entry.get("url")
+            or entry.get("webpage_url")
+            or f"https://www.youtube.com/watch?v={entry.get('id')}",
             duration=entry.get("duration"),
             thumbnail=entry.get("thumbnail"),
             uploader=entry.get("uploader"),
@@ -156,7 +161,7 @@ class YTDLPExtractor(Extractor):
             formats=formats,
         )
 
-    def _parse_format(self, f: dict) -> Format:
+    def _parse_format(self, f: dict[str, Any]) -> Format:
         """Parse format dict."""
         return Format(
             format_id=f.get("format_id", ""),

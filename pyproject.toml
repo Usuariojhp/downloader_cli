@@ -3,7 +3,8 @@ name = "media-dl"
 version = "2.0.0"
 description = "Unified Media Downloader - Cyan Edition"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [
     {name = "Media Downloader Team", email = "dev@media-dl.example"}
@@ -28,10 +29,6 @@ dependencies = [
     "typer>=0.9.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
-    "sqlite-utils>=3.0.0",
-    "aiofiles>=23.0.0",
-    "httpx>=0.25.0",
-    "tenacity>=8.2.0",
     "platformdirs>=4.0.0",
 ]
 
@@ -41,20 +38,50 @@ soundcloud = ["scdl>=1.3.0"]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
     "ruff>=0.1.0",
     "mypy>=1.7.0",
     "pyinstaller>=6.1.0",
 ]
 
 [project.scripts]
-media-dl = "media_dl.main:app"
+media-dl = "media_dl.main:cli_main"
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "PT", "SIM", "T20", "PIE", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "NPY", "RSE", "RUF", "ASYNC", "Q", "TID", "EXE", "ISC", "ICN", "LOG", "TCH", "INT", "PERF", "FURB"]
-ignore = ["S101", "S103", "S104", "S105", "S106", "S107", "S306", "S403", "S501", "S603", "S607", "T201", "T203", "ARG001", "ARG002", "PTH123", "ERA001", "PLW2901"]
-src = ["src"]
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "I", "N", "W", "UP", "B", "C4", "PT", "SIM", "T20", "PIE",
+    "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "NPY", "RSE", "RUF",
+    "ASYNC", "Q", "TID", "EXE", "ISC", "ICN", "LOG", "INT", "PERF", "FURB",
+]
+ignore = [
+    # Security rules are opt-in: this is a local CLI that shells out on purpose
+    "S101", "S103", "S104", "S105", "S106", "S107", "S306", "S403", "S501",
+    "S603", "S607",
+    # Rich output is the whole point of the tool
+    "T201", "T203",
+    # Typer requires function calls in argument defaults
+    "B008",
+    # Pydantic needs runtime imports; TYPE_CHECKING blocks break resolution
+    "TC001", "TC002", "TC003",
+    # Complexity budgets: CLI commands legitimately expose many options
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR2004",
+    # Lazy imports break circular imports and keep CLI startup fast
+    "PLC0415",
+    # Singletons (settings, console, registry) are part of the design
+    "PLW0603",
+    # Exceptions carry long, actionable messages on purpose
+    "TRY003", "TRY300", "TRY301",
+    # Documented placeholders / intentional reassignment
+    "ARG001", "ARG002", "ERA001", "PLW2901", "PTH123",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S106", "PLR2004"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -63,6 +90,7 @@ skip-magic-trailing-comma = false
 
 [tool.mypy]
 python_version = "3.11"
+mypy_path = "src"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
@@ -76,16 +104,21 @@ namespace_packages = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = "yt_dlp*"
+# Third-party packages that ship no type information
+module = [
+    "yt_dlp",
+    "yt_dlp.*",
+    "spotdl",
+    "spotdl.*",
+    "rich",
+    "rich.*",
+    "typer",
+    "typer.*",
+    "platformdirs",
+    "platformdirs.*",
+]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "spotdl*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "scdl*"
-ignore_missing_imports = true
+follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -115,3 +148,6 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["media_dl*"]
+
+[tool.setuptools.package-data]
+media_dl = ["py.typed"]

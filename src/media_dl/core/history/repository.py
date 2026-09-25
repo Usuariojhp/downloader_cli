@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from datetime import datetime
-from pathlib import Path
-from typing import Optional, List, Dict, Any, Generator
+import builtins
 import hashlib
 import json
 import sqlite3
+from collections.abc import Generator
+from contextlib import contextmanager, suppress
+from datetime import datetime
+from pathlib import Path
 from sqlite3 import Connection
+from typing import Any
 
-from media_dl.core.history.models import DownloadHistory, SettingsHistory
-from media_dl.core.exceptions import HistoryError
 from media_dl.config import get_settings
+from media_dl.core.history.models import DownloadHistory, SettingsHistory
 
 
 class HistoryRepository:
     """Repository for managing download history with raw SQLite."""
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         settings = get_settings()
         self.db_path = db_path or settings.db_path
         self._init_db()
@@ -88,7 +89,7 @@ class HistoryRepository:
         return hashlib.sha256(url.encode()).hexdigest()
 
     @staticmethod
-    def _compute_file_hash(filepath: Path) -> Optional[str]:
+    def _compute_file_hash(filepath: Path) -> str | None:
         """Compute SHA256 hash of file (first 1MB for speed)."""
         try:
             if not filepath.exists():
@@ -105,20 +106,13 @@ class HistoryRepository:
         """Convert database row to DownloadHistory."""
         info_json = None
         if row["info_json"]:
-            try:
+            with suppress(json.JSONDecodeError):
                 info_json = json.loads(row["info_json"])
-            except json.JSONDecodeError:
-                pass
 
         download_date = None
         if row["download_date"]:
-            try:
+            with suppress(ValueError):
                 download_date = datetime.fromisoformat(row["download_date"])
-            except ValueError:
-                pass
-
-        changed_at = None
-        # Not used for DownloadHistory
 
         return DownloadHistory(
             id=row["id"],
@@ -143,10 +137,8 @@ class HistoryRepository:
         """Convert database row to SettingsHistory."""
         changed_at = None
         if row["changed_at"]:
-            try:
+            with suppress(ValueError):
                 changed_at = datetime.fromisoformat(row["changed_at"])
-            except ValueError:
-                pass
 
         return SettingsHistory(
             id=row["id"],
@@ -166,10 +158,10 @@ class HistoryRepository:
         file_path: str,
         file_size: int,
         status: str = "completed",
-        duration: Optional[int] = None,
-        uploader: Optional[str] = None,
-        thumbnail: Optional[str] = None,
-        info_json: Optional[Dict[str, Any]] = None,
+        duration: int | None = None,
+        uploader: str | None = None,
+        thumbnail: str | None = None,
+        info_json: dict[str, Any] | None = None,
     ) -> DownloadHistory:
         """Add a download record."""
         url_hash = self._compute_url_hash(url)
@@ -184,16 +176,31 @@ class HistoryRepository:
 
             if existing:
                 # Update existing record
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE downloads SET
                         title = ?, platform = ?, media_type = ?, quality = ?,
                         file_path = ?, file_size = ?, file_hash = ?, status = ?,
                         duration = ?, uploader = ?, thumbnail = ?,
                         info_json = ?, download_date = CURRENT_TIMESTAMP
                     WHERE url_hash = ?
-                """, (title, platform, media_type, quality, file_path, file_size,
-                      file_hash, status, duration, uploader, thumbnail,
-                      info_json_str, url_hash))
+                """,
+                    (
+                        title,
+                        platform,
+                        media_type,
+                        quality,
+                        file_path,
+                        file_size,
+                        file_hash,
+                        status,
+                        duration,
+                        uploader,
+                        thumbnail,
+                        info_json_str,
+                        url_hash,
+                    ),
+                )
 
                 # Return updated record
                 row = conn.execute(
@@ -202,32 +209,44 @@ class HistoryRepository:
                 return self._row_to_history(row)
 
             # Insert new record
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 INSERT INTO downloads (
                     url, url_hash, title, platform, media_type, quality,
                     file_path, file_size, file_hash, status, duration,
                     uploader, thumbnail, info_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (url, url_hash, title, platform, media_type, quality,
-                  file_path, file_size, file_hash, status, duration,
-                  uploader, thumbnail, info_json_str))
+            """,
+                (
+                    url,
+                    url_hash,
+                    title,
+                    platform,
+                    media_type,
+                    quality,
+                    file_path,
+                    file_size,
+                    file_hash,
+                    status,
+                    duration,
+                    uploader,
+                    thumbnail,
+                    info_json_str,
+                ),
+            )
 
             record_id = cursor.lastrowid
 
-            row = conn.execute(
-                "SELECT * FROM downloads WHERE id = ?", (record_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM downloads WHERE id = ?", (record_id,)).fetchone()
             return self._row_to_history(row)
 
-    def get_by_url_hash(self, url_hash: str) -> Optional[DownloadHistory]:
+    def get_by_url_hash(self, url_hash: str) -> DownloadHistory | None:
         """Get record by URL hash."""
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM downloads WHERE url_hash = ?", (url_hash,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM downloads WHERE url_hash = ?", (url_hash,)).fetchone()
             return self._row_to_history(row) if row else None
 
-    def get_by_file_hash(self, file_hash: str) -> Optional[DownloadHistory]:
+    def get_by_file_hash(self, file_hash: str) -> DownloadHistory | None:
         """Get record by file hash."""
         with self._get_connection() as conn:
             row = conn.execute(
@@ -235,7 +254,7 @@ class HistoryRepository:
             ).fetchone()
             return self._row_to_history(row) if row else None
 
-    def is_duplicate(self, url: str, file_path: Optional[str] = None) -> Optional[DownloadHistory]:
+    def is_duplicate(self, url: str, file_path: str | None = None) -> DownloadHistory | None:
         """Check if URL or file is a duplicate."""
         url_hash = self._compute_url_hash(url)
 
@@ -264,14 +283,14 @@ class HistoryRepository:
         self,
         limit: int = 20,
         offset: int = 0,
-        platform: Optional[str] = None,
-        media_type: Optional[str] = None,
-        status: Optional[str] = None,
-    ) -> List[DownloadHistory]:
+        platform: str | None = None,
+        media_type: str | None = None,
+        status: str | None = None,
+    ) -> builtins.list[DownloadHistory]:
         """List download history with filters."""
         with self._get_connection() as conn:
             query = "SELECT * FROM downloads"
-            params = []
+            params: list[Any] = []
             conditions = []
 
             if platform:
@@ -295,14 +314,14 @@ class HistoryRepository:
 
     def count(
         self,
-        platform: Optional[str] = None,
-        media_type: Optional[str] = None,
-        status: Optional[str] = None,
+        platform: str | None = None,
+        media_type: str | None = None,
+        status: str | None = None,
     ) -> int:
         """Count total records with filters."""
         with self._get_connection() as conn:
             query = "SELECT COUNT(*) FROM downloads"
-            params = []
+            params: list[Any] = []
             conditions = []
 
             if platform:
@@ -318,13 +337,14 @@ class HistoryRepository:
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
 
-            return conn.execute(query, params).fetchone()[0]
+            row = conn.execute(query, params).fetchone()
+            return int(row[0]) if row else 0
 
-    def clear(self, platform: Optional[str] = None, media_type: Optional[str] = None) -> int:
+    def clear(self, platform: str | None = None, media_type: str | None = None) -> int:
         """Clear history records."""
         with self._transaction() as conn:
             query = "DELETE FROM downloads"
-            params = []
+            params: list[Any] = []
             conditions = []
 
             if platform:
@@ -340,7 +360,7 @@ class HistoryRepository:
             cursor = conn.execute(query, params)
             return cursor.rowcount
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get download statistics."""
         with self._get_connection() as conn:
             total = conn.execute("SELECT COUNT(*) FROM downloads").fetchone()[0]
@@ -371,7 +391,7 @@ class HistoryRepository:
                 "recent": recent,
             }
 
-    def log_settings_change(self, key: str, old_value: Optional[str], new_value: Optional[str]) -> None:
+    def log_settings_change(self, key: str, old_value: str | None, new_value: str | None) -> None:
         """Log a settings change."""
         with self._transaction() as conn:
             conn.execute(
@@ -379,12 +399,12 @@ class HistoryRepository:
                 (key, old_value, new_value),
             )
 
-    def get_settings_history(self, limit: int = 50) -> List[SettingsHistory]:
+    def get_settings_history(self, limit: int = 50) -> builtins.list[SettingsHistory]:
         """Get settings change history."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM settings_history ORDER BY changed_at DESC LIMIT ?",
-                (limit,)
+                "SELECT * FROM settings_history ORDER BY changed_at DESC, id DESC LIMIT ?",
+                (limit,),
             ).fetchall()
             return [self._row_to_settings_history(row) for row in rows]
 

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
-import shutil
+from typing import Any, ClassVar
 
 from media_dl.config.settings import Settings
 from media_dl.core.exceptions import StrategyError
@@ -17,24 +16,21 @@ class DownloadStrategy(ABC):
     requires_external: bool = False
 
     @abstractmethod
-    def build_args(self, settings: Settings) -> Dict[str, Any]:
+    def build_args(self, settings: Settings) -> dict[str, Any]:
         """Build yt-dlp options for this strategy."""
-        pass
 
     @abstractmethod
     def is_available(self) -> bool:
         """Check if strategy is available on system."""
-        pass
 
-    def prepare(self, settings: Settings) -> None:
-        """Optional preparation before download."""
-        pass
+    def prepare(self, settings: Settings) -> None:  # noqa: B027 - optional hook
+        """Hook run before a download starts. No-op by default."""
 
 
 class StrategyFactory:
     """Factory for creating download strategies."""
 
-    _strategies: Dict[str, DownloadStrategy] = {}
+    _strategies: ClassVar[dict[str, DownloadStrategy]] = {}
 
     @classmethod
     def register(cls, strategy: DownloadStrategy) -> None:
@@ -66,21 +62,25 @@ class StrategyFactory:
         raise StrategyError("No download strategy available")
 
 
-def build_strategy_args(strategy: DownloadStrategy, settings: Settings) -> Dict[str, Any]:
+def build_strategy_args(strategy: DownloadStrategy, settings: Settings) -> dict[str, Any]:
     """Build strategy args with common settings."""
     args = strategy.build_args(settings)
 
     # Add common options
     if settings.embed_thumbnail:
-        args.setdefault("postprocessors", []).append({
-            "key": "EmbedThumbnail",
-            "already_have_thumbnail": False,
-        })
+        args.setdefault("postprocessors", []).append(
+            {
+                "key": "EmbedThumbnail",
+                "already_have_thumbnail": False,
+            }
+        )
 
     if settings.embed_metadata:
-        args.setdefault("postprocessors", []).append({
-            "key": "FFmpegMetadata",
-        })
+        args.setdefault("postprocessors", []).append(
+            {
+                "key": "FFmpegMetadata",
+            }
+        )
 
     if settings.write_info_json:
         args["writeinfojson"] = True

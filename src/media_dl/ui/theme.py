@@ -4,35 +4,35 @@ from rich import box
 from rich.style import Style
 from rich.theme import Theme
 
-
-CYAN_THEME = Theme({
-    # Base colors
-    "primary": "cyan",
-    "secondary": "bright_cyan",
-    "success": "green",
-    "warning": "yellow",
-    "error": "red",
-    "muted": "dim cyan",
-    "accent": "magenta",
-    "info": "blue",
-    "highlight": "bold bright_cyan",
-    "dim": "dim white",
-
-    # Component styles
-    "panel.border": "cyan",
-    "panel.title": "bold cyan",
-    "table.header": "bold cyan",
-    "table.border": "cyan",
-    "table.row": "white",
-    "table.row.alt": "dim white",
-    "progress.bar": "cyan",
-    "progress.complete": "bright_cyan",
-    "progress.pulse": "cyan",
-    "prompt": "bold cyan",
-    "prompt.default": "dim cyan",
-    "input": "white",
-    "link": "underline cyan",
-})
+CYAN_THEME = Theme(
+    {
+        # Base colors
+        "primary": "cyan",
+        "secondary": "bright_cyan",
+        "success": "green",
+        "warning": "yellow",
+        "error": "red",
+        "muted": "dim cyan",
+        "accent": "magenta",
+        "info": "blue",
+        "highlight": "bold bright_cyan",
+        "dim": "dim white",
+        # Component styles
+        "panel.border": "cyan",
+        "panel.title": "bold cyan",
+        "table.header": "bold cyan",
+        "table.border": "cyan",
+        "table.row": "white",
+        "table.row.alt": "dim white",
+        "progress.bar": "cyan",
+        "progress.complete": "bright_cyan",
+        "progress.pulse": "cyan",
+        "prompt": "bold cyan",
+        "prompt.default": "dim cyan",
+        "input": "white",
+        "link": "underline cyan",
+    }
+)
 
 # Box styles
 PANEL_BOX = box.DOUBLE

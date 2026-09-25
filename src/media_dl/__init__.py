@@ -7,4 +7,4 @@ __description__ = "Unified Media Downloader - Cyan Edition"
 
 from media_dl.main import app
 
-__all__ = ["app", "__version__"]
+__all__ = ["__version__", "app"]

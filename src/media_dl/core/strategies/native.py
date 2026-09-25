@@ -1,6 +1,6 @@
 """Native yt-dlp download strategy."""
 
-from typing import Dict, Any
+from typing import Any
 
 from media_dl.config.settings import Settings
 from media_dl.core.strategies.base import DownloadStrategy
@@ -16,7 +16,7 @@ class NativeStrategy(DownloadStrategy):
         """Always available."""
         return True
 
-    def build_args(self, settings: Settings) -> Dict[str, Any]:
+    def build_args(self, settings: Settings) -> dict[str, Any]:
         """Build native downloader arguments."""
         # Native strategy doesn't need special args
         # yt-dlp handles downloading internally

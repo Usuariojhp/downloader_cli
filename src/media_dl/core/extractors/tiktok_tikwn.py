@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import httpx
-from typing import Optional
+from types import TracebackType
+from typing import ClassVar
 
-from media_dl.core.extractors.base import Extractor, register_extractor
-from media_dl.core.models import MediaInfo, Format
+import httpx
+
 from media_dl.core.exceptions import ExtractorError
+from media_dl.core.extractors.base import Extractor, register_extractor
+from media_dl.core.models import Format, MediaInfo
 
 
 @register_extractor
@@ -15,10 +17,10 @@ class TikTokTikwnExtractor(Extractor):
     """TikTok extractor using tikwn.com API as fallback."""
 
     name = "tiktok-tikwn"
-    domains = ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"]
+    domains: ClassVar[list[str]] = ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"]
     priority = 100  # High priority for TikTok specifically
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.api_url = "https://www.tikwn.com/api/"
         self.headers = {
@@ -85,16 +87,23 @@ class TikTokTikwnExtractor(Extractor):
             )
 
         except httpx.HTTPError as e:
-            raise ExtractorError(f"HTTP error: {e}", url=url, platform="TikTok", cause=e)
+            raise ExtractorError(f"HTTP error: {e}", url=url, platform="TikTok", cause=e) from e
         except Exception as e:
-            raise ExtractorError(f"Tikwn extraction failed: {e}", url=url, platform="TikTok", cause=e)
+            raise ExtractorError(
+                f"Tikwn extraction failed: {e}", url=url, platform="TikTok", cause=e
+            ) from e
 
-    async def close(self):
+    async def close(self) -> None:
         """Close HTTP client."""
         await self.client.aclose()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> TikTokTikwnExtractor:
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         await self.close()

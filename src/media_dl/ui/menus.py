@@ -2,23 +2,31 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, Optional, Callable
-from rich.console import Console
+from typing import Any
+
 from rich.panel import Panel
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
-from rich.box import ROUNDED, DOUBLE
-from rich.prompt import Prompt, Confirm
 from rich.text import Text
 
-from media_dl.ui.console import get_console
+from media_dl.ui.console import get_console, is_interactive
 from media_dl.ui.theme import (
-    PANEL_BOX, MENU_BOX, PANEL_STYLE, PANEL_TITLE_STYLE,
-    TABLE_BOX, TABLE_BORDER_STYLE, TABLE_HEADER_STYLE,
-    STYLE_PRIMARY, STYLE_SUCCESS, STYLE_WARNING, STYLE_ERROR, STYLE_MUTED,
+    MENU_BOX,
+    PANEL_BOX,
+    PANEL_STYLE,
 )
 
-
 console = get_console()
+
+
+def _ask(prompt: str, default: str = "", **kwargs: Any) -> str:
+    """Prompt for input, falling back to ``default`` when stdin is not a terminal."""
+    if not is_interactive():
+        return default
+    try:
+        return Prompt.ask(prompt, default=default, **kwargs)
+    except (EOFError, KeyboardInterrupt):
+        return default
 
 
 def show_header(title: str, subtitle: str = "") -> None:
@@ -42,7 +50,7 @@ def show_header(title: str, subtitle: str = "") -> None:
 
 def show_menu(
     title: str,
-    options: List[Tuple[str, str, str]],
+    options: list[tuple[str, str, str]],
     exit_option: str = "Salir",
 ) -> str:
     """
@@ -81,12 +89,12 @@ def show_menu(
     console.print(panel)
 
     valid_keys = [opt[0] for opt in options] + ["0"]
-    choice = Prompt.ask(
+    return _ask(
         "[prompt]Selecciona una opción[/prompt]",
+        default="0",
         choices=valid_keys,
         show_choices=False,
     )
-    return choice
 
 
 def show_main_menu() -> str:
@@ -97,12 +105,12 @@ def show_main_menu() -> str:
         ("3", "📋 Descarga por Lotes", "Múltiples URLs desde archivo o entrada"),
         ("4", "📜 Ver Historial", "Ver descargas previas con detalles"),
         ("5", "⚙️  Configuración", "Personalizar comportamiento"),
-        ("6", "ℹ️  Información", "Ver estado del sistema"),
+        ("6", "🩺  Diagnóstico", "Ver estado del sistema"),
     ]
     return show_menu("MENÚ PRINCIPAL", options)
 
 
-def show_quality_menu(qualities: List[str], default: str = "auto") -> str:
+def show_quality_menu(qualities: list[str], default: str = "auto") -> str:
     """Show quality selection menu."""
     table = Table(
         show_header=False,
@@ -126,12 +134,12 @@ def show_quality_menu(qualities: List[str], default: str = "auto") -> str:
     )
     console.print(panel)
 
-    choice = Prompt.ask(
+    return _ask(
         "[prompt]Elige calidad[/prompt]",
+        default=str(len(qualities) + 1),
         choices=[str(i) for i in range(1, len(qualities) + 2)],
         show_choices=False,
     )
-    return choice
 
 
 def show_audio_format_menu() -> str:
@@ -187,7 +195,12 @@ def show_batch_input_menu() -> str:
 
 def confirm_action(message: str, default: bool = False) -> bool:
     """Show confirmation prompt."""
-    return Confirm.ask(f"[prompt]{message}[/prompt]", default=default)
+    if not is_interactive():
+        return default
+    try:
+        return Confirm.ask(f"[prompt]{message}[/prompt]", default=default)
+    except (EOFError, KeyboardInterrupt):
+        return default
 
 
 def prompt_input(
@@ -196,9 +209,11 @@ def prompt_input(
     password: bool = False,
 ) -> str:
     """Prompt for text input."""
-    return Prompt.ask(
+    if not is_interactive() and not default:
+        return ""
+    return _ask(
         f"[prompt]{prompt}[/prompt]",
-        default=default if default else ...,
+        default=default,
         password=password,
     )
 
@@ -212,7 +227,7 @@ def prompt_int(
     """Prompt for integer input with validation."""
     while True:
         try:
-            val = Prompt.ask(
+            val = _ask(
                 f"[prompt]{prompt}[/prompt]",
                 default=str(default),
             )
@@ -274,4 +289,6 @@ def show_warning_panel(title: str, content: str) -> None:
 
 def pause(message: str = "Presiona Enter para continuar...") -> None:
     """Pause execution waiting for Enter."""
-    Prompt.ask(f"[dim]{message}[/dim]", default="", show_default=False)
+    if not is_interactive():
+        return
+    _ask(f"[dim]{message}[/dim]", default="", show_default=False)
