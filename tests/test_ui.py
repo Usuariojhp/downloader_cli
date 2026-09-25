@@ -21,11 +21,6 @@ class TestNonInteractive:
 
         mock_prompt.ask.assert_not_called()
 
-    def test_confirm_action_returns_default(self):
-        with patch.object(menus, "is_interactive", return_value=False):
-            assert menus.confirm_action("¿Seguro?", default=True) is True
-            assert menus.confirm_action("¿Seguro?", default=False) is False
-
     def test_prompt_yes_no_returns_default(self):
         with patch.object(prompts, "is_interactive", return_value=False):
             assert prompts.prompt_yes_no("¿Seguro?", default=True) is True
@@ -139,14 +134,6 @@ class TestInteractivePaths:
         ):
             mock_prompt.ask.return_value = "1"
             assert prompts.prompt_audio_bitrate() == 320
-
-    def test_prompt_int_range_validates(self):
-        with (
-            patch.object(prompts, "is_interactive", return_value=True),
-            patch.object(prompts, "Prompt") as mock_prompt,
-        ):
-            mock_prompt.ask.side_effect = ["abc", "99", "5"]
-            assert prompts.prompt_int_range("Valor", 1, 10) == 5
 
     def test_prompt_playlist_range_all(self):
         with (

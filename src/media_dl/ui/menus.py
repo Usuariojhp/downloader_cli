@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.markup import escape
 from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
@@ -109,84 +109,6 @@ def show_main_menu() -> str:
         ("6", "🩺  Diagnóstico", "Ver estado del sistema"),
     ]
     return show_menu("MENÚ PRINCIPAL", options)
-
-
-def show_playlist_options(playlist_title: str, total_videos: int) -> str:
-    """Show playlist download options."""
-    content = Text()
-    content.append(f"\n  📺 Título: {playlist_title}\n", style="white")
-    content.append(f"  📊 Videos: {total_videos}\n", style="cyan")
-
-    panel = Panel(
-        content,
-        title="[bold magenta]🎬 PLAYLIST DETECTADA[/bold magenta]",
-        border_style="magenta",
-        box=PANEL_BOX,
-        padding=(1, 2),
-    )
-    console.print(panel)
-
-    options = [
-        ("1", "📥 Descargar TODO", f"Todos los {total_videos} videos"),
-        ("2", "🎯 Rango específico", "Ej: 1-5, 10, 15-20"),
-        ("3", "❌ Cancelar", "Volver al menú"),
-    ]
-    return show_menu("OPCIONES DE PLAYLIST", options)
-
-
-def show_batch_input_menu() -> str:
-    """Show batch input method selection."""
-    options = [
-        ("1", "📋 Pegar URLs", "Una por línea, línea vacía para terminar"),
-        ("2", "📁 Archivo .txt", "Cargar URLs desde archivo"),
-    ]
-    return show_menu("MÉTODO DE ENTRADA", options)
-
-
-def confirm_action(message: str, default: bool = False) -> bool:
-    """Show confirmation prompt."""
-    if not is_interactive():
-        return default
-    try:
-        return Confirm.ask(f"[prompt]{message}[/prompt]", default=default)
-    except (EOFError, KeyboardInterrupt):
-        return default
-
-
-def prompt_input(
-    prompt: str,
-    default: str = "",
-    password: bool = False,
-) -> str:
-    """Prompt for text input."""
-    if not is_interactive() and not default:
-        return ""
-    return _ask(
-        f"[prompt]{prompt}[/prompt]",
-        default=default,
-        password=password,
-    )
-
-
-def prompt_int(
-    prompt: str,
-    default: int = 0,
-    min_val: int = 0,
-    max_val: int = 100,
-) -> int:
-    """Prompt for integer input with validation."""
-    while True:
-        try:
-            val = _ask(
-                f"[prompt]{prompt}[/prompt]",
-                default=str(default),
-            )
-            num = int(val)
-            if min_val <= num <= max_val:
-                return num
-            console.print(f"[error]Valor debe estar entre {min_val} y {max_val}[/error]")
-        except ValueError:
-            console.print("[error]Por favor ingresa un número válido[/error]")
 
 
 def show_info_panel(title: str, content: str) -> None:

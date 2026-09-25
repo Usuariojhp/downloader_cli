@@ -47,9 +47,9 @@ yt-dlp no hace falta ninguna cuenta.
 
 ### 📊 Gestión Avanzada
 - **Historial SQLite** - Registro completo con metadatos
-- **Detección duplicados** - Por URL hash + hash de archivo. Si repites una
-  descarga te pregunta; si dices que sí, **no pisa el archivo anterior**:
-  crea uno nuevo con `(1)`, `(2)`... y el primero queda intacto
+- **Detección de duplicados** - Por URL: si vuelves a descargar lo mismo te
+  avisa. Si dices que sí, **no pisa el archivo anterior**: crea uno nuevo con
+  `(1)`, `(2)`... y el primero queda intacto
 - **Configuración persistente** - JSON + variables de entorno
 - **Playlists** - Rangos personalizados (ej: `1-5, 10, 15-20`)
 

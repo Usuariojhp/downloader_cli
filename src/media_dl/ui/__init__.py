@@ -2,17 +2,12 @@
 
 from media_dl.ui.console import get_console, reset_console
 from media_dl.ui.menus import (
-    confirm_action,
     pause,
-    prompt_input,
-    prompt_int,
-    show_batch_input_menu,
     show_error_panel,
     show_header,
     show_info_panel,
     show_main_menu,
     show_menu,
-    show_playlist_options,
     show_success_panel,
     show_warning_panel,
 )
@@ -46,7 +41,6 @@ from media_dl.ui.theme import CYAN_THEME
 
 __all__ = [
     "CYAN_THEME",
-    "confirm_action",
     "create_config_table",
     "create_format_table",
     "create_history_table",
@@ -64,8 +58,6 @@ __all__ = [
     "prompt_config_value",
     "prompt_directory",
     "prompt_file_path",
-    "prompt_input",
-    "prompt_int",
     "prompt_int_range",
     "prompt_playlist_range",
     "prompt_quality",
@@ -74,13 +66,11 @@ __all__ = [
     "prompt_urls_batch",
     "prompt_yes_no",
     "reset_console",
-    "show_batch_input_menu",
     "show_error_panel",
     "show_header",
     "show_info_panel",
     "show_main_menu",
     "show_menu",
-    "show_playlist_options",
     "show_success_panel",
     "show_warning_panel",
 ]
