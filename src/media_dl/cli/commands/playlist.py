@@ -245,11 +245,14 @@ def playlist(
             console.print(f"[bold cyan]{'=' * 60}[/bold cyan]")
 
             try:
-                video_url = entry.url or f"https://www.youtube.com/watch?v={entry.id}"
+                # La URL de la entrada es la que va al historial; para bajar se
+                # usa la directa si el extractor la resolvió.
+                pagina_url = entry.url or f"https://www.youtube.com/watch?v={entry.id}"
+                video_url = entry.media_url or pagina_url
 
                 # Check duplicate
                 if settings.check_duplicates:
-                    duplicate = repo.is_duplicate(video_url)
+                    duplicate = repo.is_duplicate(pagina_url)
                     if duplicate:
                         console.print(
                             f"[yellow]⏭️ Saltando (ya descargado): {duplicate.title}[/yellow]"
@@ -298,7 +301,7 @@ def playlist(
                 file_size = file_path.stat().st_size if file_path.exists() else 0
 
                 repo.add(
-                    url=video_url,
+                    url=pagina_url,
                     title=entry.title,
                     platform=info.platform,
                     media_type=media_type,

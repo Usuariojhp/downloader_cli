@@ -1,5 +1,7 @@
 """Tests for the download command helpers and batch flow."""
 
+import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,7 +17,7 @@ from media_dl.cli.commands.download import (
     run_video,
 )
 from media_dl.config import Settings
-from media_dl.core.models import Format, MediaInfo
+from media_dl.core.models import DownloadRequest, Format, MediaInfo
 
 
 @pytest.fixture
@@ -286,9 +288,16 @@ class TestQualityPrompting:
         quality_answer="1080",
         format_answer="mp3",
         bitrate_answer=192,
+        tmp_path=None,
         **kwargs,
     ):
         """Ejecuta fn con todo parcheado; devuelve los mocks de las preguntas."""
+        # La descarga "mockeada" tiene que dejar un archivo real, porque el
+        # código comprueba que existe antes de dizer que ha ido bien.
+        destino = (tmp_path or Path(tempfile.mkdtemp())) / "descarga.mp4"
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"x" * 64)
+
         repo = MagicMock()
         repo.is_duplicate.return_value = None
         strategy = MagicMock()
@@ -301,7 +310,10 @@ class TestQualityPrompting:
             patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
             patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
             patch("media_dl.cli.commands.download._run_async", return_value=info),
-            patch("media_dl.cli.commands.download._download_with_retry", return_value="/tmp/x.mp4"),
+            patch(
+                "media_dl.cli.commands.download._download_with_retry",
+                return_value=str(destino),
+            ),
             patch("media_dl.cli.commands.download._can_ask", return_value=interactive),
             patch("media_dl.cli.commands.download.prompt_quality") as p_quality,
             patch("media_dl.cli.commands.download.prompt_audio_format") as p_format,
@@ -366,7 +378,7 @@ class TestQualityPrompting:
         mocks = self._run(info, settings, run_audio, url="https://youtube.com/watch?v=abc")
         mocks["bitrate"].assert_called_once()
 
-    def test_audio_original_skips_bitrate_question(self, info, settings):
+    def test_audio_original_skips_bitrate_question(self, info, settings, tmp_path):
         """Si eliges 'original', el bitrate de MP3 no tiene sentido: no se pregunta."""
         mocks = self._run(
             info,
@@ -374,6 +386,7 @@ class TestQualityPrompting:
             run_audio,
             url="https://youtube.com/watch?v=abc",
             format_answer="original",
+            tmp_path=tmp_path,
         )
         mocks["bitrate"].assert_not_called()
         assert mocks["repo"].add.call_args.kwargs["quality"] == "original"
@@ -416,3 +429,243 @@ class TestQualityPrompting:
         mocks = self._run(info, config, run_audio, url="https://youtube.com/watch?v=abc")
         assert mocks["format"].call_args.kwargs["default"] == "mp3"
         assert mocks["bitrate"].call_args.kwargs["default"] == 320
+
+
+class TestNoOverwrite:
+    """Al volver a descargar lo mismo nunca se pisa el archivo anterior."""
+
+    @pytest.fixture
+    def settings(self, tmp_path):
+        return Settings(
+            download_path=tmp_path / "descargas",
+            config_dir=tmp_path / "config",
+            db_path=tmp_path / "config" / "history.db",
+        )
+
+    @pytest.fixture
+    def info(self):
+        return MediaInfo(
+            id="abc123",
+            title="Mi vídeo",
+            url="https://youtube.com/watch?v=abc123",
+            platform="YouTube",
+            duration=100,
+            formats=[Format(format_id="1", ext="mp4", height=720, vcodec="v", acodec="a")],
+        )
+
+    # ---------- el cálculo del nombre ----------
+
+    def test_free_stem_when_nothing_exists(self, tmp_path):
+        from media_dl.cli.commands.download import _free_output_stem
+
+        assert _free_output_stem(tmp_path, "cancion [abc]") == "cancion [abc]"
+
+    def test_free_stem_avoids_existing(self, tmp_path):
+        from media_dl.cli.commands.download import _free_output_stem
+
+        (tmp_path / "cancion [abc].mp4").write_bytes(b"x")
+        assert _free_output_stem(tmp_path, "cancion [abc]") == "cancion [abc] (1)"
+
+    def test_free_stem_ignores_extension(self, tmp_path):
+        """Un .m4a previo también cuenta como ocupado."""
+        from media_dl.cli.commands.download import _free_output_stem
+
+        (tmp_path / "cancion [abc].m4a").write_bytes(b"x")
+        assert _free_output_stem(tmp_path, "cancion [abc]") == "cancion [abc] (1)"
+
+    def test_free_stem_increments(self, tmp_path):
+        from media_dl.cli.commands.download import _free_output_stem
+
+        (tmp_path / "cancion [abc].mp4").write_bytes(b"x")
+        (tmp_path / "cancion [abc] (1).mp4").write_bytes(b"x")
+        assert _free_output_stem(tmp_path, "cancion [abc]") == "cancion [abc] (2)"
+
+    def test_stem_with_brackets_is_escaped(self, tmp_path):
+        """Los corchetes del nombre son comodines de glob: hay que escaparlos."""
+        from media_dl.cli.commands.download import _free_output_stem
+
+        (tmp_path / "song [live].mp4").write_bytes(b"x")
+        assert _free_output_stem(tmp_path, "song [live]") == "song [live] (1)"
+
+    def test_outtmpl_uses_stem(self, settings, info):
+        from media_dl.cli.commands.download import _build_ydl_opts
+
+        request = DownloadRequest(url="u", media_type="video", quality=BEST_VIDEO)
+        opts = _build_ydl_opts(request, {}, settings, stem="nombre (1)")
+        assert opts["outtmpl"].endswith("nombre (1).%(ext)s")
+
+    def test_outtmpl_default_unchanged(self, settings, info):
+        from media_dl.cli.commands.download import _build_ydl_opts
+
+        request = DownloadRequest(url="u", media_type="video", quality=BEST_VIDEO)
+        opts = _build_ydl_opts(request, {}, settings)
+        assert opts["outtmpl"].endswith("%(title).100s [%(id)s].%(ext)s")
+
+    # ---------- el flujo completo ----------
+
+    def _run_video(self, info, settings, *, answer_yes, force=False, tmp_path=None):
+        repo = MagicMock()
+        repo.is_duplicate.return_value = MagicMock(title="Mi vídeo")
+        strategy = MagicMock()
+        strategy.is_available.return_value = True
+        strategy.build_args.return_value = {}
+
+        with (
+            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("media_dl.cli.commands.download.get_extractor"),
+            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch("media_dl.cli.commands.download._download_with_retry") as download,
+            patch("media_dl.cli.commands.download.prompt_yes_no", return_value=answer_yes),
+            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+        ):
+            if answer_yes:
+                run_video(url=info.url, force=force)
+            else:
+                run_video(url=info.url, force=force)
+            return repo, download
+
+    def test_answering_no_cancels(self, info, settings):
+        repo, download = self._run_video(info, settings, answer_yes=False)
+        download.assert_not_called()
+
+    def test_answering_yes_picks_a_free_name(self, info, settings, tmp_path):
+        """Respondiendo 'y' se descarga, pero con otro nombre."""
+        salida = settings.download_path
+        salida.mkdir(parents=True, exist_ok=True)
+        (salida / "Mi vídeo [abc123].mp4").write_bytes(b"viejo")
+
+        repo, download = self._run_video(info, settings, answer_yes=True)
+
+        opts = download.call_args.args[1]
+        assert opts["outtmpl"].endswith("Mi vídeo [abc123] (1).%(ext)s")
+
+    def test_answering_yes_keeps_the_original(self, info, settings):
+        salida = settings.download_path
+        salida.mkdir(parents=True, exist_ok=True)
+        original = salida / "Mi vídeo [abc123].mp4"
+        original.write_bytes(b"contenido original")
+
+        self._run_video(info, settings, answer_yes=True)
+
+        # el archivo previo sigue intacto
+        assert original.read_bytes() == b"contenido original"
+
+    def test_no_duplicate_uses_normal_template(self, info, settings):
+        repo = MagicMock()
+        repo.is_duplicate.return_value = None
+        strategy = MagicMock()
+        strategy.is_available.return_value = True
+        strategy.build_args.return_value = {}
+
+        with (
+            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("media_dl.cli.commands.download.get_extractor"),
+            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch("media_dl.cli.commands.download._download_with_retry") as download,
+            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+        ):
+            run_video(url=info.url)
+
+        opts = download.call_args.args[1]
+        assert opts["outtmpl"].endswith("%(title).100s [%(id)s].%(ext)s")
+
+    def test_missing_file_is_not_reported_as_success(self, info, settings, capsys):
+        """Si yt-dlp no crea el archivo, no decimos '✅ Completada'."""
+        repo = MagicMock()
+        repo.is_duplicate.return_value = None
+        strategy = MagicMock()
+        strategy.is_available.return_value = True
+        strategy.build_args.return_value = {}
+
+        with (
+            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("media_dl.cli.commands.download.get_extractor"),
+            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch(
+                "media_dl.cli.commands.download._download_with_retry",
+                return_value="/no/existe/nada.mp4",
+            ),
+            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+        ):
+            run_video(url=info.url)
+
+        salida = capsys.readouterr().out
+        assert "No se creó el archivo" in salida
+        assert "Descarga Completada" not in salida
+        repo.add.assert_not_called()
+
+
+class TestMediaUrl:
+    """Un extractor puede entregar una URL directa de medios (Spotify)."""
+
+    def test_uses_media_url_when_present(self, settings):
+        info = MediaInfo(
+            id="spot",
+            title="Canción",
+            url="https://open.spotify.com/track/spot",
+            platform="Spotify",
+            media_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        )
+        repo = MagicMock()
+        repo.is_duplicate.return_value = None
+        strategy = MagicMock()
+        strategy.is_available.return_value = True
+        strategy.build_args.return_value = {}
+        destino = settings.download_path / "cancion.mp3"
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"x" * 32)
+
+        with (
+            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("media_dl.cli.commands.download.get_extractor"),
+            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch(
+                "media_dl.cli.commands.download._download_with_retry", return_value=str(destino)
+            ) as download,
+            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+        ):
+            run_audio(url=info.url, audio_format="mp3", bitrate=192)
+
+        # se descarga la URL resuelta, no la de Spotify
+        assert download.call_args.args[0] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        # pero el historial guarda la de Spotify
+        assert repo.add.call_args.kwargs["url"] == "https://open.spotify.com/track/spot"
+
+    def test_falls_back_to_page_url(self, settings):
+        info = MediaInfo(
+            id="abc",
+            title="Vídeo",
+            url="https://youtube.com/watch?v=abc",
+            platform="YouTube",
+        )
+        repo = MagicMock()
+        repo.is_duplicate.return_value = None
+        strategy = MagicMock()
+        strategy.is_available.return_value = True
+        strategy.build_args.return_value = {}
+        destino = settings.download_path / "v.mp4"
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"x" * 32)
+
+        with (
+            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("media_dl.cli.commands.download.get_extractor"),
+            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch(
+                "media_dl.cli.commands.download._download_with_retry", return_value=str(destino)
+            ) as download,
+            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+        ):
+            run_video(url=info.url)
+
+        assert download.call_args.args[0] == "https://youtube.com/watch?v=abc"

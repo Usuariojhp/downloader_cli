@@ -65,6 +65,7 @@ class PlaylistEntry(BaseModel):
     id: str
     title: str
     url: str
+    media_url: str | None = None
     duration: float | None = None
     thumbnail: str | None = None
     uploader: str | None = None
@@ -100,6 +101,10 @@ class MediaInfo(BaseModel):
     is_live: bool = False
     was_live: bool = False
     availability: str | None = None
+
+    # URL directa de medios, cuando el extractor sabe resolverla.
+    # Spotify, por ejemplo, devuelve un vídeo equivalente en YouTube Music.
+    media_url: str | None = None
 
     # Playlist fields
     is_playlist: bool = False

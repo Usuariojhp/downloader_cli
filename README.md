@@ -25,8 +25,8 @@ extremo contra la plataforma real, no solo si el extractor existe.
 | YouTube | ✅ | ✅ | ✅ | Sí | Vídeo, MP3, subtítulos, 4K, playlists |
 | TikTok | ✅ | ✅ | ❌ | Sí | API tikwn con degradación a yt-dlp |
 | Facebook | ✅ | ✅ | ❌ | Sí | Vídeos públicos (fb.watch) |
-| Spotify | ❌ | ✅ | ✅ | Metadatos | Requiere `spotdl` para descargar |
-| SoundCloud | ❌ | ✅ | ✅ | No | Requiere `scdl` |
+| Spotify | ❌ | ✅ | ✅ | Sí | Busca el audio en YouTube Music; necesita `spotdl` |
+| SoundCloud | ❌ | ✅ | ✅ | No | Metadatos con `scdl`, descarga con yt-dlp |
 | Instagram | ⚠️ | ⚠️ | ❌ | No | Ver [Instagram](#instagram-y-x-requieren-cuenta) |
 | Twitter/X | ⚠️ | ⚠️ | ❌ | No | Ver [Instagram](#instagram-y-x-requieren-cuenta) |
 | +100 más | ✅ | ✅ | ✅ | Parcial | Via yt-dlp, depende de la plataforma |
@@ -47,7 +47,9 @@ yt-dlp no hace falta ninguna cuenta.
 
 ### 📊 Gestión Avanzada
 - **Historial SQLite** - Registro completo con metadatos
-- **Detección duplicados** - Por URL hash + hash de archivo
+- **Detección duplicados** - Por URL hash + hash de archivo. Si repites una
+  descarga te pregunta; si dices que sí, **no pisa el archivo anterior**:
+  crea uno nuevo con `(1)`, `(2)`... y el primero queda intacto
 - **Configuración persistente** - JSON + variables de entorno
 - **Playlists** - Rangos personalizados (ej: `1-5, 10, 15-20`)
 
@@ -353,7 +355,7 @@ toca tu `~/.config/media-dl` real.
 
 | Comprobación | Estado |
 |---|---|
-| `pytest` | 230 tests, todos en verde |
+| `pytest` | 244 tests, todos en verde |
 | `ruff check .` | 0 errores |
 | `ruff format --check .` | 0 diferencias |
 | `mypy src/` (strict) | 0 errores |

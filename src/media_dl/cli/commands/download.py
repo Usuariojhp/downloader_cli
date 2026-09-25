@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import glob
 import time
 from collections.abc import Coroutine
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -111,6 +112,22 @@ def _can_ask() -> bool:
     return is_interactive()
 
 
+def _free_output_stem(directory: Path, stem: str) -> str:
+    """Return a stem that no file in ``directory`` uses yet.
+
+    El programa nunca pisa un archivo que ya existe: si vuelve a descargarse
+    lo mismo, se crea una variante "titulo (1)", "(2)"... y el original se
+    queda intacto.
+    """
+    if not any(directory.glob(f"{glob.escape(stem)}.*")):
+        return stem
+
+    counter = 1
+    while any(directory.glob(f"{glob.escape(f'{stem} ({counter})')}.*")):
+        counter += 1
+    return f"{stem} ({counter})"
+
+
 def _merge_postprocessors(opts: dict[str, Any], settings: Settings) -> None:
     """Add thumbnail/metadata postprocessors once, keeping any provided ones."""
     postprocessors = list(opts.get("postprocessors") or [])
@@ -126,10 +143,20 @@ def _merge_postprocessors(opts: dict[str, Any], settings: Settings) -> None:
 
 
 def _build_ydl_opts(
-    request: DownloadRequest, strategy_args: dict[str, Any], settings: Settings
+    request: DownloadRequest,
+    strategy_args: dict[str, Any],
+    settings: Settings,
+    stem: str | None = None,
 ) -> dict[str, Any]:
+    """Build yt-dlp options.
+
+    ``stem`` fija el nombre sin extensión (la extensión la decide yt-dlp). Se
+    usa para no sobrescribir: si el archivo ya existe, se le pasa una variante
+    libre tipo "titulo (1)".
+    """
     base_path = Path(request.output_path or settings.download_path)
-    output_template = str(base_path / "%(title).100s [%(id)s].%(ext)s")
+    name = stem or "%(title).100s [%(id)s]"
+    output_template = str(base_path / f"{name}.%(ext)s")
 
     opts = {
         "outtmpl": output_template,
@@ -218,6 +245,26 @@ def _download_with_retry(
     ) from last_error
 
 
+def _output_stem_for(
+    info: Any,
+    settings: Settings,
+    request: DownloadRequest,
+    *,
+    duplicate: Any = None,
+) -> str | None:
+    """Nombre de salida cuando hay que conservar lo ya descargado.
+
+    Devuelve None si no hay conflicto: entonces manda la plantilla normal.
+    """
+    if duplicate is None:
+        return None
+
+    directory = Path(request.output_path or settings.download_path)
+    directory.mkdir(parents=True, exist_ok=True)
+    titulo = info.title[:80].strip() or info.id
+    return _free_output_stem(directory, f"{titulo} [{info.id}]")
+
+
 def run_video(
     url: str,
     quality: str | None = None,
@@ -238,6 +285,7 @@ def run_video(
         console.print(show_media_info_table(info))
 
         repo = HistoryRepository()
+        duplicate = None
         if settings.check_duplicates and not force:
             duplicate = repo.is_duplicate(url)
             if duplicate:
@@ -250,6 +298,10 @@ def run_video(
                 if not prompt_yes_no("¿Descargar de nuevo?", default=False):
                     console.print("[yellow]Descarga cancelada[/yellow]")
                     return
+                console.print(
+                    "[cyan]Se conservará el archivo anterior; "
+                    "el nuevo se guardará con otro nombre[/cyan]"
+                )
 
         if quality is None and _can_ask() and info.available_heights:
             quality = prompt_quality(
@@ -269,8 +321,12 @@ def run_video(
 
         strategy_args = build_strategy_args(strategy, settings)
 
+        # Si el extractor resolvió una URL directa de audio (Spotify, etc.),
+        # se descarga esa; si no, la de la página.
+        destino = info.media_url or url
+
         request = DownloadRequest(
-            url=url,
+            url=destino,
             media_type="video",
             quality=format_str,
             subtitles=subs.split(",")
@@ -281,7 +337,8 @@ def run_video(
             force=force,
         )
 
-        ydl_opts = _build_ydl_opts(request, strategy_args, settings)
+        stem = _output_stem_for(info, settings, request, duplicate=duplicate)
+        ydl_opts = _build_ydl_opts(request, strategy_args, settings, stem=stem)
 
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -295,11 +352,22 @@ def run_video(
             task = progress.add_task("[cyan]Descargando...", total=100)
 
             start_time = time.time()
-            filepath = _download_with_retry(url, ydl_opts, progress, task, settings.retry_attempts)
+            filepath = _download_with_retry(
+                destino, ydl_opts, progress, task, settings.retry_attempts
+            )
             duration = time.time() - start_time
 
         file_path = Path(filepath)
-        file_size = file_path.stat().st_size if file_path.exists() else 0
+        if not file_path.exists():
+            show_warning_panel(
+                "⚠️ No se creó el archivo",
+                f"Se esperaba aquí:\n{file_path}\n\n"
+                "Puede que el archivo ya existiera con ese nombre. "
+                "Prueba con -F para forzar la descarga.",
+            )
+            return
+
+        file_size = file_path.stat().st_size
 
         repo.add(
             url=url,
@@ -350,6 +418,7 @@ def run_audio(
         console.print(show_media_info_table(info))
 
         repo = HistoryRepository()
+        duplicate = None
         if settings.check_duplicates and not force:
             duplicate = repo.is_duplicate(url)
             if duplicate:
@@ -384,8 +453,10 @@ def run_audio(
 
         strategy_args = build_strategy_args(strategy, settings)
 
+        destino = info.media_url or url
+
         request = DownloadRequest(
-            url=url,
+            url=destino,
             media_type="audio",
             format=cast('Literal["mp3", "original"]', audio_format),
             bitrate=cast("Literal[128, 192, 320]", bitrate),
@@ -394,7 +465,8 @@ def run_audio(
             force=force,
         )
 
-        ydl_opts = _build_ydl_opts(request, strategy_args, settings)
+        stem = _output_stem_for(info, settings, request, duplicate=duplicate)
+        ydl_opts = _build_ydl_opts(request, strategy_args, settings, stem=stem)
 
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -408,14 +480,25 @@ def run_audio(
             task = progress.add_task("[cyan]Descargando audio...", total=100)
 
             start_time = time.time()
-            filepath = _download_with_retry(url, ydl_opts, progress, task, settings.retry_attempts)
+            filepath = _download_with_retry(
+                destino, ydl_opts, progress, task, settings.retry_attempts
+            )
             duration = time.time() - start_time
 
         file_path = Path(filepath)
         if audio_format == "mp3":
             file_path = file_path.with_suffix(".mp3")
 
-        file_size = file_path.stat().st_size if file_path.exists() else 0
+        if not file_path.exists():
+            show_warning_panel(
+                "⚠️ No se creó el archivo",
+                f"Se esperaba aquí:\n{file_path}\n\n"
+                "Puede que el archivo ya existiera con ese nombre. "
+                "Prueba con -F para forzar la descarga.",
+            )
+            return
+
+        file_size = file_path.stat().st_size
 
         repo.add(
             url=url,

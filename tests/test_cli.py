@@ -101,20 +101,18 @@ class TestDownloadVideo:
         with patch("media_dl.cli.commands.download._run_async") as mock_run:
             mock_run.return_value = sample_media_info
 
+            destino = tmp_path / "test_video.mp4"
+            destino.write_bytes(b"x" * 50_000_000)
+
             with patch("media_dl.cli.commands.download._download_with_retry") as mock_download:
-                mock_download.return_value = str(tmp_path / "test_video.mp4")
+                mock_download.return_value = str(destino)
 
-                with patch("pathlib.Path.stat") as mock_stat:
-                    mock_stat.return_value.st_size = 50000000
+                result = runner.invoke(
+                    app, ["download", "video", "https://youtube.com/watch?v=test123"]
+                )
 
-                    result = runner.invoke(
-                        app, ["download", "video", "https://youtube.com/watch?v=test123"]
-                    )
-
-                    assert result.exit_code == 0
-                    assert (
-                        "Descarga Completada" in result.stdout or "Video guardado" in result.stdout
-                    )
+                assert result.exit_code == 0
+                assert "Descarga Completada" in result.stdout or "Video guardado" in result.stdout
 
     def test_download_video_invalid_url(self):
         result = runner.invoke(app, ["download", "video", "not-a-url"])
@@ -137,20 +135,19 @@ class TestDownloadAudio:
         with patch("media_dl.cli.commands.download._run_async") as mock_run:
             mock_run.return_value = sample_media_info
 
+            m4a = tmp_path / "test_audio.m4a"
+            m4a.write_bytes(b"y" * 5_000_000)
+            mp3 = tmp_path / "test_audio.mp3"
+            mp3.write_bytes(b"y" * 5_000_000)
+
             with patch("media_dl.cli.commands.download._download_with_retry") as mock_download:
-                mock_download.return_value = str(tmp_path / "test_audio.m4a")
+                mock_download.return_value = str(m4a)
 
-                with patch("pathlib.Path.stat") as mock_stat:
-                    mock_stat.return_value.st_size = 5000000
+                result = runner.invoke(
+                    app, ["download", "audio", "https://youtube.com/watch?v=test123"]
+                )
 
-                    with patch("pathlib.Path.with_suffix") as mock_suffix:
-                        mock_suffix.return_value = tmp_path / "test_audio.mp3"
-
-                        result = runner.invoke(
-                            app, ["download", "audio", "https://youtube.com/watch?v=test123"]
-                        )
-
-                        assert result.exit_code == 0
+                assert result.exit_code == 0
 
 
 @pytest.fixture

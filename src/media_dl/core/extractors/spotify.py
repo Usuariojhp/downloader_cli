@@ -8,8 +8,14 @@ from typing import Any, ClassVar
 from media_dl.core.exceptions import ExtractorError
 from media_dl.core.extractors.base import Extractor, register_extractor
 from media_dl.core.models import Format, MediaInfo, PlaylistEntry
+from media_dl.ui.console import get_console
 
 _spotdl_available: bool | None = None
+
+#: Proveedores de audio de spotdl, en el orden en que los prueba él mismo.
+#: Se usan para obtener una URL de audio real, porque la API de Spotify no
+#: entrega ficheros sino solo metadatos.
+AUDIO_PROVIDERS = ("YouTubeMusic", "Piped", "SoundCloud", "BandCamp")
 
 
 def check_spotdl() -> bool:
@@ -23,6 +29,18 @@ def check_spotdl() -> bool:
         except ImportError:
             _spotdl_available = False
     return _spotdl_available
+
+
+def _audio_format() -> Format:
+    """Descriptor del formato que spotdl entrega (MP3 de alta calidad)."""
+    return Format(
+        format_id="spotify_best",
+        ext="mp3",
+        vcodec="none",
+        acodec="mp3",
+        abr=320,
+        quality_note="320kbps MP3",
+    )
 
 
 @register_extractor
@@ -56,6 +74,27 @@ class SpotifyExtractor(Extractor):
                 no_cache=True,
                 headless=True,
             )
+
+    def _resolve_media_url(self, song: Any) -> str | None:
+        """Find a real audio URL for a track using spotdl's audio providers.
+
+        La API de Spotify no da ficheros, así que spotdl busca la misma canción
+        en fuentes de audio gratuitás. Devolvemos la URL para que la descarga la
+        haga yt-dlp, que sí sabe bajarla.
+        """
+        import spotdl.providers.audio as providers
+
+        for name in AUDIO_PROVIDERS:
+            provider_cls = getattr(providers, name, None)
+            if provider_cls is None:
+                continue
+            try:
+                url = provider_cls().search(song)
+            except Exception:  # un proveedor que falle no debe parar el resto
+                continue
+            if url:
+                return str(url)
+        return None
 
     def can_handle(self, url: str) -> bool:
         return super().can_handle(url) and check_spotdl()
@@ -107,14 +146,16 @@ class SpotifyExtractor(Extractor):
 
     def _parse_track(self, song: Any, url: str) -> MediaInfo:
         """Parse single track."""
-        format_obj = Format(
-            format_id="spotify_best",
-            ext="mp3",
-            vcodec="none",
-            acodec="mp3",
-            abr=320,
-            quality_note="320kbps MP3",
-        )
+        media_url = self._resolve_media_url(song)
+        if not media_url:
+            raise ExtractorError(
+                f"No se ha encontrado audio para {song.name!r} en ninguna fuente "
+                "(YouTube Music, Piped, SoundCloud, BandCamp)",
+                url=url,
+                platform="Spotify",
+            )
+
+        format_obj = _audio_format()
 
         return MediaInfo(
             id=song.song_id or "",
@@ -126,26 +167,27 @@ class SpotifyExtractor(Extractor):
             thumbnail=song.cover_url,
             formats=[format_obj],
             tags=song.genres or [],
+            media_url=media_url,
             is_playlist=False,
         )
 
     def _parse_playlist(self, playlist: Any, url: str) -> MediaInfo:
-        """Parse playlist."""
+        """Parse playlist. Resuelve el audio canción a canción."""
         entries = []
         for idx, song in enumerate(playlist.songs or [], 1):
-            format_obj = Format(
-                format_id="spotify_best",
-                ext="mp3",
-                vcodec="none",
-                acodec="mp3",
-                abr=320,
-                quality_note="320kbps MP3",
-            )
+            # Una canción que no aparezca en ninguna fuente no debe tirar la lista
+            media_url = self._resolve_media_url(song)
+            if not media_url:
+                console.print(f"[yellow]⚠️  Sin audio para {song.name!r}; se omite[/yellow]")
+                continue
+
+            format_obj = _audio_format()
             entries.append(
                 PlaylistEntry(
                     id=song.song_id or f"track_{idx}",
                     title=song.name,
                     url=f"https://open.spotify.com/track/{song.song_id}" if song.song_id else url,
+                    media_url=media_url,
                     duration=song.duration,
                     thumbnail=song.cover_url,
                     uploader=", ".join(song.artists) if song.artists else None,
@@ -175,19 +217,18 @@ class SpotifyExtractor(Extractor):
         """Parse album."""
         entries = []
         for idx, song in enumerate(album.songs or [], 1):
-            format_obj = Format(
-                format_id="spotify_best",
-                ext="mp3",
-                vcodec="none",
-                acodec="mp3",
-                abr=320,
-                quality_note="320kbps MP3",
-            )
+            media_url = self._resolve_media_url(song)
+            if not media_url:
+                console.print(f"[yellow]⚠️  Sin audio para {song.name!r}; se omite[/yellow]")
+                continue
+
+            format_obj = _audio_format()
             entries.append(
                 PlaylistEntry(
                     id=song.song_id or f"track_{idx}",
                     title=song.name,
                     url=f"https://open.spotify.com/track/{song.song_id}" if song.song_id else url,
+                    media_url=media_url,
                     duration=song.duration,
                     thumbnail=song.cover_url,
                     uploader=", ".join(song.artists) if song.artists else None,
@@ -212,3 +253,6 @@ class SpotifyExtractor(Extractor):
             playlist_count=len(entries),
             entries=entries,
         )
+
+
+console = get_console()
