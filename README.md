@@ -436,7 +436,7 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 ## 💬 Soporte
 
 - **Errores**: [GitHub Issues](https://github.com/Usuariojhp/downloader_cli/issues/new/choose)
-- **Preguntas**: [Discusiones](https://github.com/Usuariojhp/downloader_cli/discussions)
+- **Preguntas**: [nueva pregunta](https://github.com/Usuariojhp/downloader_cli/issues/new/choose)
 - **Estado de las pruebas**: [CI en GitHub Actions](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml)
 
 Es un proyecto personal y el soporte es limitado: si algo falla, abre una issue
