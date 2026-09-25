@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discusiones (preguntas abiertas, ideas)
+    url: https://github.com/Usuariojhp/downloader_cli/discussions
+    about: Para dudas que no encajen en una issue concreta.

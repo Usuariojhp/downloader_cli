@@ -2,7 +2,8 @@
 
 **Cyan Edition v2.0.0** - Descargador multimedia unificado con interfaz moderna en tonos cian.
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/media-dl/media-dl)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/Usuariojhp/downloader_cli)
+[![CI](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11+-green)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -60,29 +61,66 @@ yt-dlp no hace falta ninguna cuenta.
 
 ## 📦 Instalación
 
-### Opción 1: Desde PyPI (recomendado)
+> ⚠️ **Este proyecto NO está en PyPI.** Existe un paquete llamado `media-dl`
+> en PyPI que **no es este proyecto** (lo publica un tercero, versión 0.1).
+> `pip install media-dl` te instalaría su código, no el nuestro. Instala
+> siempre desde el repositorio, como se explica abajo.
+
+**Requisitos:** Python **3.11 o superior**. Con 3.10 o inferior la instalación falla.
+
+### Opción 1: Desde el repositorio (la única vía soportada)
+
 ```bash
-pip install media-dl
+git clone https://github.com/Usuariojhp/downloader_cli.git
+cd downloader_cli
+python3 -m venv .venv && source .venv/bin/activate   # opcional pero recomendado
+pip install -e .
 ```
 
-### Opción 2: Desde código (desarrollo)
+Para trabajar en el proyecto (tests, linter, tipos):
+
 ```bash
-git clone https://github.com/media-dl/media-dl
-cd media-dl
 pip install -e ".[dev]"
 ```
 
-### Opción 3: Ejecutable portable (sin Python)
+### Opción 2: Ejecutable portable (sin instalar Python)
+
+Cada push a `master` compila un binario autónomo para Linux. Se descarga desde
+la pestaña **Actions** del repo → última ejecución → **Artifacts** →
+`media-dl-linux` (requiere iniciar sesión en GitHub). Son ~180 MB porque
+lleva Python y todas las dependencias dentro.
+
 ```bash
-# Descargar release desde GitHub Releases
 chmod +x media-dl
-./media-dl --help
+./media-dl doctor     # comprueba que funciona
 ```
 
-### Dependencias del sistema (recomendadas)
+Solo para Linux x86-64. Para Windows usa `build\build.bat` (no verificado).
+
+### Extras opcionales
+
+Spotify y SoundCloud necesitan herramientas adicionales que **no** son
+obligatorias:
+
 ```bash
+pip install -e ".[spotify]"     # descarga de Spotify (requiere spotdl)
+pip install -e ".[soundcloud]"  # descarga de SoundCloud (requiere scdl)
+```
+
+### Dependencias del sistema
+
+Ninguna es obligatoria: sin ellas el programa funciona igual, pero sin
+descargas "ultra" (aria2c) y sin conversión a MP3 (ffmpeg).
+
+```bash
+# Fedora
+sudo dnf install aria2 ffmpeg
+
 # Ubuntu/Debian
 sudo apt install aria2 ffmpeg
+
+# Arch
+sudo pacman -S aria2 ffmpeg
 
 # macOS
 brew install aria2 ffmpeg
@@ -92,6 +130,12 @@ choco install aria2 ffmpeg
 
 # Windows (Scoop)
 scoop install aria2 ffmpeg
+```
+
+Comprueba lo que tienes con:
+
+```bash
+media-dl doctor
 ```
 
 ---
@@ -340,22 +384,34 @@ twine upload dist/*
 ## 🤝 Contribuir
 
 1. Fork del repositorio
-2. Crear rama: `git checkout -b feature/nueva-funcionalidad`
-3. Commit: `git commit -am 'Agregar nueva funcionalidad'`
-4. Push: `git push origin feature/nueva-funcionalidad`
-5. Abrir Pull Request
+2. Rama: `git checkout -b feature/nueva-funcionalidad`
+3. Antes de abrir el PR, las cuatro puertas tienen que pasar en verde:
+   ```bash
+   pytest                      # 212 tests
+   ruff check .                # lint
+   ruff format --check .       # formato
+   mypy src/                   # tipos (modo strict)
+   ```
+4. Commit con un mensaje que explique el *porqué*, no solo el *qué*
+5. `git push origin feature/nueva-funcionalidad` y abre el Pull Request
 
-### Estándares de código
-```bash
-# Formatear
-ruff format .
+La CI ejecuta exactamente esos mismos comandos, así que si pasa en tu máquina
+pasa en GitHub.
 
-# Lint
-ruff check .
+### Cómo está organizado el proyecto
 
-# Type check
-mypy src/
-```
+| Carpeta | Contenido |
+|---------|-----------|
+| `src/media_dl/core/extractors/` | Un extractor por plataforma, con prioridad |
+| `src/media_dl/core/strategies/` | aria2c y yt-dlp como estrategias intercambiables |
+| `src/media_dl/core/history/` | Historial en SQLite |
+| `src/media_dl/cli/commands/` | Los comandos de la terminal |
+| `src/media_dl/ui/` | Colores, tablas, menús y barras de progreso |
+| `tests/` | 212 tests, uno por comportamiento |
+
+Añadir una plataforma nueva es un fichero en `core/extractors/` que herede de
+`Extractor` y se registre con `@register_extractor`. El registro se encarga
+de elegirlo por prioridad.
 
 ---
 
@@ -379,9 +435,12 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 
 ## 💬 Soporte
 
-- **Issues**: [GitHub Issues](https://github.com/media-dl/media-dl/issues)
-- **Documentación**: [Wiki](https://github.com/media-dl/media-dl/wiki)
-- **Discusiones**: [GitHub Discussions](https://github.com/media-dl/media-dl/discussions)
+- **Errores**: [GitHub Issues](https://github.com/Usuariojhp/downloader_cli/issues/new/choose)
+- **Preguntas**: [Discusiones](https://github.com/Usuariojhp/downloader_cli/discussions)
+- **Estado de las pruebas**: [CI en GitHub Actions](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml)
+
+Es un proyecto personal y el soporte es limitado: si algo falla, abre una issue
+con la salida de `media-dl doctor` y el comando exacto que ejecutaste.
 
 ---
 
