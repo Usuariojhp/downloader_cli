@@ -527,7 +527,7 @@ class TestNoOverwrite:
             return repo, download
 
     def test_answering_no_cancels(self, info, settings):
-        repo, download = self._run_video(info, settings, answer_yes=False)
+        _repo, download = self._run_video(info, settings, answer_yes=False)
         download.assert_not_called()
 
     def test_answering_yes_picks_a_free_name(self, info, settings, tmp_path):
@@ -536,7 +536,7 @@ class TestNoOverwrite:
         salida.mkdir(parents=True, exist_ok=True)
         (salida / "Mi vídeo [abc123].mp4").write_bytes(b"viejo")
 
-        repo, download = self._run_video(info, settings, answer_yes=True)
+        _repo, download = self._run_video(info, settings, answer_yes=True)
 
         opts = download.call_args.args[1]
         assert opts["outtmpl"].endswith("Mi vídeo [abc123] (1).%(ext)s")
