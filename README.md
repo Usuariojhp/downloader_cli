@@ -260,7 +260,7 @@ media-dl/
 ```
 
 ### Patrones de diseño
-- **Extractor Registry** - Prioridad por plataforma (TikTok → tikwn.com)
+- **Extractor Registry** - Prioridad por plataforma, con degradación a yt-dlp
 - **Strategy Pattern** - aria2c / native intercambiables
 - **Repository Pattern** - Historial tipado sobre `sqlite3` (stdlib)
 - **Settings Management** - Pydantic Settings v2 (JSON + env)
