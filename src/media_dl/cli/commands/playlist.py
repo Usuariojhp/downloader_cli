@@ -20,7 +20,7 @@ from rich.progress import (
 )
 
 from media_dl.config import Settings, get_settings
-from media_dl.core.cover import embed_cover
+from media_dl.core.cover import explain_embed_cover
 from media_dl.core.exceptions import DownloadError, MediaDLError
 from media_dl.core.extractors import get_extractor
 from media_dl.core.history import HistoryRepository
@@ -302,7 +302,9 @@ def playlist(
                 file_size = file_path.stat().st_size if file_path.exists() else 0
 
                 if settings.embed_thumbnail:
-                    embed_cover(file_path, entry.thumbnail)
+                    cover_ok, cover_reason = explain_embed_cover(file_path, entry.thumbnail)
+                    if not cover_ok:
+                        console.print(f"[yellow]⚠️  Portada no incrustada: {cover_reason}[/yellow]")
 
                 repo.add(
                     url=pagina_url,
