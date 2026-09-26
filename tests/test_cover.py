@@ -7,6 +7,7 @@ import zlib
 from pathlib import Path
 from unittest.mock import patch
 
+from media_dl.core import cover as cover_module
 from media_dl.core.cover import embed_cover, has_cover
 
 
@@ -94,6 +95,19 @@ class TestEmbedCoverEdgeCases:
         with patch("media_dl.core.cover._fetch") as fetch:
             assert embed_cover(temp_dir / "nada.mp3", "https://cdn.example/c.png") is False
         fetch.assert_not_called()
+
+    def test_mp3_import_is_static_so_pyinstaller_bundles_mutagen(self) -> None:
+        """El import de mutagen tiene que ser una sentencia, no dinámico.
+
+        PyInstaller solo lee sentencias de import. Con un
+        importlib.import_module, mutagen deja de entrar en el binario,
+        embed_cover se traga el ImportError y las descargas salen sin
+        portada sin decir nada. Pasó de verdad al intentar callar a mypy,
+        así que el guard se queda aquí y no en la buena memoria.
+        """
+        source = Path(cover_module.__file__).read_text()
+        assert 'importlib.import_module("mutagen' not in source
+        assert "from mutagen.id3 import APIC, ID3" in source
 
     def test_unsupported_container_is_ignored(self, temp_dir: Path) -> None:
         target = temp_dir / "cancion.ogg"

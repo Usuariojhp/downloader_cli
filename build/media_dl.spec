@@ -17,6 +17,10 @@ def _pykakasi_data():
     detecta solo: sin ellos, 'import spotdl' o el formateador de titulos
     revientan con FileNotFoundError en tiempo de ejecucion. collect_all lo
     resuelve de una vez, en vez de ir scopando faltante por faltante.
+
+    mutagen se recoge a proposito aunque su import sea estatico: es la
+    dependencia de la caratula, y si se pierde, embed_cover se traga la
+    excepcion y las descargas salen sin portada sin avisar de nada.
     """
     try:
         from PyInstaller.utils.hooks import collect_all
@@ -24,7 +28,7 @@ def _pykakasi_data():
         return [], [], []
 
     datas, binaries, hiddenimports = [], [], []
-    for paquete in ("spotdl", "pykakasi", "spotapi", "ytmusicapi"):
+    for paquete in ("spotdl", "pykakasi", "spotapi", "ytmusicapi", "mutagen"):
         try:
             d, b, h = collect_all(paquete)
         except Exception:

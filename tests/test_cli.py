@@ -294,6 +294,30 @@ class TestDoctor:
         assert "no incluido en este binario" in _plano(result.stdout)
         assert "pip install" not in _plano(result.stdout)
 
+    def test_strict_falla_si_no_hay_mutagen(self):
+        """Sin mutagen no hay carátula, y no se nota hasta que se descarga.
+
+        cover.embed_cover se traga cualquier excepción y devuelve False, así
+        que si mutagen se pierde del binario las descargas salen sin portada y
+        sin decir nada. Pasó de verdad: al cambiar el import de mutagen a uno
+        dinámico para callar a mypy, PyInstaller dejó de empaquetarlo.
+        """
+        real_import = importlib.import_module
+
+        def solo_sin_mutagen(nombre, *args, **kwargs):
+            if nombre.startswith("mutagen"):
+                raise ImportError("No instalado")
+            return real_import(nombre, *args, **kwargs)
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/aria2c"),
+            patch("importlib.import_module", side_effect=solo_sin_mutagen),
+        ):
+            result = runner.invoke(app, ["doctor", "--strict"])
+
+        assert result.exit_code == 1
+        assert "Carátulas incrustadas" in _plano(result.stdout)
+
     def test_strict_falla_si_falta_una_extension(self):
         """Este es el guard que atrapa al spec: sin el, el build pasa en verde.
 

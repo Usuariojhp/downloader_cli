@@ -87,6 +87,10 @@ def run_doctor(verbose: bool = False) -> bool:
     rich_ok, rich_ver = _check_python_package("rich")
     typer_ok, typer_ver = _check_python_package("typer")
     pydantic_ok, pydantic_ver = _check_python_package("pydantic")
+    # mutagen no es solo para etiquetas: sin el no hay carátula, y como
+    # embed_cover se traga la excepcion, se pierde en silencio. Ponerlo
+    # aqui lo convierte en fallo visible de --strict.
+    mutagen_ok, mutagen_ver = _check_python_package("mutagen.id3")
     # SQLite is built-in
     sqlite_ok, sqlite_ver = True, "built-in (sqlite3)"
 
@@ -119,6 +123,7 @@ def run_doctor(verbose: bool = False) -> bool:
         "pydantic", "✅" if pydantic_ok else "❌", pydantic_ver, "Validación de configuración"
     )
     table.add_row("sqlite3", "✅" if sqlite_ok else "❌", sqlite_ver, "Base de datos (built-in)")
+    table.add_row("mutagen", "✅" if mutagen_ok else "❌", mutagen_ver, "Carátulas incrustadas")
 
     # External tools
     table.add_row("", "", "", "")
@@ -157,7 +162,7 @@ def run_doctor(verbose: bool = False) -> bool:
     console.print(table)
 
     # Summary
-    all_required = all([ytdlp_ok, rich_ok, typer_ok, pydantic_ok, sqlite_ok])
+    all_required = all([ytdlp_ok, rich_ok, typer_ok, pydantic_ok, sqlite_ok, mutagen_ok])
     external_ok = aria2c_ok and ffmpeg_ok
 
     # Una extensión opcional rota no impide usar el programa, pero en el

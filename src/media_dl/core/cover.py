@@ -8,7 +8,6 @@ already knew the album art URL. This module closes that gap.
 
 from __future__ import annotations
 
-import importlib
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -75,15 +74,17 @@ def embed_cover(path: Path, image_url: str | None) -> bool:
 
     try:
         if suffix == ".mp3":
-            # APIC solo esta declarado como reexportacion a partir de mutagen
-            # 1.48; con 1.47 mypy lo da pormissing, y con 1.48 el 'type: ignore'
-            # sobrante es un error en si mismo. Importando el modulo entero,
-            # sus atributos salen como Any y el mismo codigo vale para ambas.
-            id3 = importlib.import_module("mutagen.id3")
+            # Import estatico a proposito: PyInstaller solo ve las sentencias
+            # de import, no los importlib.import_module, asi que un import
+            # dinamico hace que mutagen no entre en el binario y las
+            # portadas dejen de incrustarse sin que nada avise.
+            # El suelo de mutagen es 1.48, donde APIC ya viene declarado
+            # como reexportacion y mypy no necesita un 'type: ignore'.
+            from mutagen.id3 import APIC, ID3
 
-            load: Any = id3.ID3
-            new_tags: Any = id3.ID3
-            frame: Any = id3.APIC
+            load: Any = ID3
+            new_tags: Any = ID3
+            frame: Any = APIC
             try:
                 tags = load(path)
             except Exception:

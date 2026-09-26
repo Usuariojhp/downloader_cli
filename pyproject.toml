@@ -32,7 +32,7 @@ dependencies = [
     "pydantic-settings>=2.1.0",
     "platformdirs>=4.0.0",
     "httpx>=0.25.0",
-    "mutagen>=1.47.0",
+    "mutagen>=1.48",
 ]
 
 [project.optional-dependencies]

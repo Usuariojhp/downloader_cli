@@ -203,6 +203,17 @@ class TestPyInstallerSpec:
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
         assert "doctor --strict" in workflow
 
+    def test_spec_collects_mutagen_explicitly(self):
+        """mutagen se recoge a mano aunque su import sea estático.
+
+        PyInstaller solo detecta sentencias de import. Si alguien cambia el
+        de cover.py por un importlib.import_module para callar a mypy, el
+        módulo desaparece del binario y las carátulas dejan de incrustarse
+        sin ningún error visible. collect_all lo blinda.
+        """
+        spec = (ROOT / "build" / "media_dl.spec").read_text()
+        assert '"mutagen"' in spec, "El spec debe recoger mutagen a mano"
+
     def test_entry_point_exists_on_disk(self):
         """La ruta que empaqueta el spec tiene que existir de verdad.
 
