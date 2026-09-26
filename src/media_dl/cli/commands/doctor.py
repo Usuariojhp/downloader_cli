@@ -93,7 +93,8 @@ def run_doctor(verbose: bool = False) -> bool:
     mutagen_ok, mutagen_ver = _check_python_package("mutagen.id3")
     # Import estatico a proposito: si se perdiera al empaquetar, el self_test
     # de abajo lo cuenta y el --strict de la CI pone el build en rojo.
-    from media_dl.core.cover import self_test as cover_self_test, ca_status
+    from media_dl.core.cover import ca_status
+    from media_dl.core.cover import self_test as cover_self_test
 
     cover_ok, cover_reason = cover_self_test()
     ca_ok, ca_reason = ca_status()

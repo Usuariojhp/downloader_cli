@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 import struct
-import tempfile
 import sys
+import tempfile
 import zlib
 from pathlib import Path
 from unittest.mock import patch

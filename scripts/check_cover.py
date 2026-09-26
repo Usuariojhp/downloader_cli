@@ -6,6 +6,7 @@ Used by the CI e2e test to verify the cover was embedded.
 
 import os
 import sys
+
 from mutagen.id3 import ID3
 
 
