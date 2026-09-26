@@ -294,6 +294,51 @@ class TestDoctor:
         assert "no incluido en este binario" in _plano(result.stdout)
         assert "pip install" not in _plano(result.stdout)
 
+    def test_strict_falla_si_falta_una_extension(self):
+        """Este es el guard que atrapa al spec: sin el, el build pasa en verde.
+
+        Antes el workflow solo comprobaba que la cadena 'doctor --strict'
+        estuviera en el YAML, sin ejecutar nada, asi que un spec que dejaba
+        spotdl fuera no rompia la CI.
+        """
+        real_import = importlib.import_module
+
+        def solo_sin_spotdl(nombre, *args, **kwargs):
+            if nombre == "spotdl":
+                raise ImportError("No instalado")
+            return real_import(nombre, *args, **kwargs)
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/aria2c"),
+            patch("importlib.import_module", side_effect=solo_sin_spotdl),
+        ):
+            result = runner.invoke(app, ["doctor", "--strict"])
+
+        assert result.exit_code == 1
+
+    def test_strict_no_falla_por_faltar_ffmpeg(self):
+        """ffmpeg y aria2c no se empaquetan: su ausencia avisa, pero no rompe.
+
+        El binario no puede llevar programas del sistema dentro. Si --strict
+        los contara, cualquier runner de CI sin ffmpeg (que es el caso normal)
+        dejaria el build en rojo por algo que no es un defecto del artefacto.
+        scdl se deja en su sitio porque si se empaqueta con el binario.
+        """
+
+        def solo_sin_externas(nombre, *args, **kwargs):
+            return None if nombre in {"aria2c", "ffmpeg"} else f"/usr/bin/{nombre}"
+
+        with (
+            patch("shutil.which", side_effect=solo_sin_externas),
+            patch("importlib.import_module") as mock_import,
+        ):
+            mock_import.return_value.__version__ = "2024.1.0"
+            result = runner.invoke(app, ["doctor", "--strict"])
+
+        assert result.exit_code == 0
+        # aun asi avisa de que conversion no estara disponible
+        assert "ffmpeg" in _plano(result.stdout)
+
 
 class TestMain:
     def test_version(self):

@@ -74,7 +74,7 @@ def _is_portable() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
-def run_doctor(verbose: bool = False, strict: bool = False) -> bool:
+def run_doctor(verbose: bool = False) -> bool:
     """Print system diagnostics. Devuelve False si algo opcional falta."""
     settings = get_settings()
     show_header("🏥 DIAGNÓSTICO DEL SISTEMA", "media-dl Cyan Edition")
@@ -212,7 +212,13 @@ def run_doctor(verbose: bool = False, strict: bool = False) -> bool:
         console.print(f"  Executable: {sys.executable}")
         console.print(f"  Config: {settings.config_file}")
 
-    return not (broken_extras or not all_required or not external_ok)
+    # --strict solo juzga lo que el paquete y el spec pueden arreglar: las
+    # dependencias de Python y las extensiones que el binario declara traer.
+    # ffmpeg y aria2c son programas del sistema, no se pueden empaquetar, y su
+    # ausencia ya avisa en el panel de arriba. Si tambien fallaran aqui,
+    # cualquier runner de CI sin ffmpeg pondria el build en rojo por algo que
+    # no es un defecto del artefacto, y dejaria de comprobar lo que si importa.
+    return not (broken_extras or not all_required)
 
 
 def update_deps() -> None:
@@ -247,11 +253,16 @@ def update_deps() -> None:
 def doctor(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Información detallada"),
     strict: bool = typer.Option(
-        False, "--strict", help="Sale con error si falta alguna extensión opcional"
+        False,
+        "--strict",
+        help=(
+            "Sale con error si falta una dependencia o una extensión incluida. "
+            "No cuenta ffmpeg/aria2c, que son del sistema"
+        ),
     ),
 ) -> None:
     """Ejecutar diagnóstico del sistema"""
-    healthy = run_doctor(verbose, strict)
+    healthy = run_doctor(verbose)
     if strict and not healthy:
         raise typer.Exit(1)
 
