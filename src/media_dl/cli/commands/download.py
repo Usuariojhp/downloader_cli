@@ -24,7 +24,7 @@ from rich.progress import (
 )
 
 from media_dl.config import Settings, get_settings
-from media_dl.core.cover import embed_cover
+from media_dl.core.cover import explain_embed_cover
 from media_dl.core.exceptions import DownloadError, MediaDLError
 from media_dl.core.extractors import get_extractor
 from media_dl.core.history import HistoryRepository
@@ -501,8 +501,14 @@ def run_audio(
 
         file_size = file_path.stat().st_size
 
+        cover_note = ""
         if settings.embed_thumbnail:
-            embed_cover(file_path, info.thumbnail)
+            cover_ok, cover_reason = explain_embed_cover(file_path, info.thumbnail)
+            if not cover_ok:
+                # Se avisa en vez de callar: una descarga sin portada parece
+                # un fallo del extractor cuando en realidad puede ser que la
+                # imagen no se bajara, y sin el motivo no hay manera de saberlo.
+                cover_note = f"\n⚠️  Portada no incrustada: {cover_reason}"
 
         repo.add(
             url=url,
@@ -525,7 +531,7 @@ def run_audio(
             + "\n"
             f"Tamaño: {format_size(file_size)}\n"
             f"Tiempo: {duration:.1f}s\n"
-            f"Ubicación: {file_path}",
+            f"Ubicación: {file_path}" + cover_note,
         )
 
     except MediaDLError as e:

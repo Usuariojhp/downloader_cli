@@ -1,5 +1,6 @@
 """Tests for the download command helpers and batch flow."""
 
+import re
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -692,7 +693,7 @@ class TestCoverEmbedding:
             media_url="https://music.youtube.com/watch?v=xyz",
         )
 
-    def _run(self, info, settings, fn):
+    def _run(self, info, settings, fn, cover_result=(True, "portada incrustada")):
         repo = MagicMock()
         repo.is_duplicate.return_value = None
         strategy = MagicMock()
@@ -710,8 +711,9 @@ class TestCoverEmbedding:
             patch("media_dl.cli.commands.download._run_async", return_value=info),
             patch("media_dl.cli.commands.download._download_with_retry", return_value=str(destino)),
             patch("media_dl.cli.commands.download._can_ask", return_value=False),
-            patch("media_dl.cli.commands.download.embed_cover") as embed,
+            patch("media_dl.cli.commands.download.explain_embed_cover") as embed,
         ):
+            embed.return_value = cover_result
             fn(url=info.url)
         return embed, destino
 
@@ -725,6 +727,18 @@ class TestCoverEmbedding:
         settings.embed_thumbnail = False
         embed, _destino = self._run(info, settings, run_audio)
         embed.assert_not_called()
+
+    def test_avisa_si_la_portada_no_se_incrusta(self, info, settings, capsys):
+        """Sin este aviso, una descarga sin portada no se distingue de un fallo.
+
+        Una vez perdido mutagen del binario, todo funcionaba y las descargas
+        salían sin portada con total silencio. Ahora el motivo sale en el
+        panel de éxito, que es donde el usuario va a mirar.
+        """
+        self._run(info, settings, run_audio, cover_result=(False, "no se pudo descargar la imagen"))
+        salida = re.sub(r"[│┃|]", " ", capsys.readouterr().out)
+        assert "Portada no incrustada" in salida
+        assert "no se pudo descargar la imagen" in salida
 
     def test_really_writes_the_cover(self, info, settings):
         """Sin parches: el archivo descargado acaba con la imagen dentro."""
