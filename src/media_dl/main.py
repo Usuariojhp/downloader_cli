@@ -108,6 +108,8 @@ def interactive() -> None:
                 show_history()
 
             elif choice == "5":
+                from media_dl.cli.commands.config import VALID_KEYS
+
                 while True:
                     show_header("⚙️ CONFIGURACIÓN")
                     console.print("[bold]Opciones:[/bold]")
@@ -121,7 +123,14 @@ def interactive() -> None:
                     if opt == 1:
                         show_config()
                     elif opt == 2:
-                        key = typer.prompt("[prompt]Clave[/prompt]")
+                        # Show valid keys as hints
+                        keys_str = ", ".join(f"[cyan]{k}[/cyan]" for k in VALID_KEYS)
+                        console.print(f"\n[dim]Claves válidas: {keys_str}[/dim]")
+                        key = typer.prompt("[prompt]Clave[/prompt]").strip()
+                        if key not in VALID_KEYS:
+                            show_error_panel("Error", f"Clave inválida: {key}")
+                            pause()
+                            continue
                         set_config(key)
                     elif opt == 3:
                         reset_config()

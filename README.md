@@ -223,14 +223,31 @@ media-dl interactive
 }
 ```
 
-`embed_thumbnail` incrusta la imagen dentro del archivo. yt-dlp solo puede
-hacerlo si la fuente trae la imagen adjunta, y el audio que llega de YouTube
-Music para Spotify no la trae, así que media-dl la baja aparte de la
-portada que da el extractor y la pega al final. Si la carátula no se puede
-descargar, la descarga **no** falla: el archivo se guarda sin imagen.
+### Todas las claves configurables
+
+| Clave | Tipo | Valores / Rango | Default | Descripción |
+|-------|------|-----------------|---------|-------------|
+| `download_path` | `path` | carpeta absoluta o relativa | `./downloads` | Carpeta donde se guardan las descargas |
+| `download_mode` | `choice` | `ultra` \| `normal` | `ultra` | `ultra` usa aria2c (8+ conexiones), `normal` usa yt-dlp directo |
+| `default_video_quality` | `string` | `auto`, `1080`, `720`, `480`, `best`, `worst` | `auto` | Calidad de video por defecto |
+| `default_audio_format` | `choice` | `mp3` \| `original` | `mp3` | Formato de audio por defecto |
+| `default_audio_bitrate` | `int` | 128–320 | 192 | Bitrate MP3 en kbps |
+| `auto_subtitle` | `bool` | `true` \| `false` | `false` | Descargar subtítulos automáticos |
+| `subtitle_languages` | `list` | códigos ISO separados por coma (ej: `es,en`) | `""` | Idiomas de subtítulos preferidos |
+| `retry_attempts` | `int` | 1–10 | 3 | Reintentos tras fallo de red |
+| `check_duplicates` | `bool` | `true` \| `false` | `true` | Evita bajar archivos ya en historial |
+| `aria2c_connections` | `int` | 4–32 | 16 | Conexiones simultáneas por archivo (modo ultra) |
+| `aria2c_split` | `int` | 1–32 | 1 | Número de segmentos por conexión |
+| `max_download_speed` | `int` | 0–1000000 KB/s (0 = sin límite) | 0 | Límite global de velocidad de descarga |
+| `concurrent_downloads` | `int` | 1–8 | 3 | Archivos en paralelo (batch / playlist) |
+| `embed_thumbnail` | `bool` | `true` \| `false` | `true` | Incrustar carátula en el archivo de audio |
+| `embed_metadata` | `bool` | `true` \| `false` | `true` | Escribir metadatos ID3 (título, artista, álbum...) |
+| `write_info_json` | `bool` | `true` \| `false` | `false` | Guardar `.info.json` de yt-dlp junto al archivo |
+
+> **Notas:** `embed_thumbnail` solo funciona si la fuente provee la imagen (YouTube Music/Spotify: media-dl la descarga aparte y la inyecta). Si no hay carátula, el archivo se guarda sin ella — la descarga no falla.
 
 ### Variables de entorno
-Tienen prioridad sobre `config.json`.
+Tienen prioridad sobre `config.json` (prefijo `MEDIA_DL_` + nombre de la clave en mayúsculas).
 
 ```bash
 export MEDIA_DL_DOWNLOAD_PATH=~/Downloads
@@ -239,6 +256,18 @@ export MEDIA_DL_ARIA2C_CONNECTIONS=32
 export MEDIA_DL_MAX_DOWNLOAD_SPEED=5000  # KB/s
 export MEDIA_DL_CONFIG_DIR=~/.config/media-dl  # dónde vive config.json
 ```
+
+### Modo interactivo — Configuración
+```
+media-dl interactive
+  → 5 ⚙️ Configuración
+      → 1 Ver configuración
+      → 2 Cambiar valor  (te pide la clave y su nuevo valor)
+      → 3 Restablecer por defecto
+      → 4 Ver rutas
+      → 0 Volver
+```
+En **Cambiar valor** se listan las claves válidas y se valida tu entrada.
 
 ---
 

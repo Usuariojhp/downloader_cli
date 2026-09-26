@@ -177,38 +177,35 @@ def create_history_table(history: list[DownloadHistory], limit: int = 20) -> Tab
 def create_config_table(config: dict[str, Any]) -> Table:
     """Create table with configuration settings."""
     table = Table(
-        show_header=False,
+        show_header=True,
+        header_style="bold cyan",
         box=TABLE_BOX,
         border_style="cyan",
         padding=(0, 1),
     )
-    table.add_column("Opción", style="bold yellow", width=5)
     table.add_column("Configuración", style="white", width=35)
     table.add_column("Valor Actual", style="green")
 
-    # Config items in order
     items = [
-        ("1", "Carpeta de descargas", config.get("download_path", "./downloads")),
-        ("2", "Modo de descarga", config.get("download_mode", "ultra")),
-        ("3", "Calidad video por defecto", config.get("default_video_quality", "auto")),
-        ("4", "Formato audio por defecto", config.get("default_audio_format", "mp3")),
-        ("5", "Calidad audio por defecto", f"{config.get('default_audio_bitrate', 192)} kbps"),
-        ("6", "Subtítulos automáticos", str(config.get("auto_subtitle", False))),
-        ("7", "Idiomas subtítulos", ", ".join(config.get("subtitle_languages", ["es", "en"]))),
-        ("8", "Intentos de reintento", str(config.get("retry_attempts", 3))),
-        ("9", "Verificar duplicados", str(config.get("check_duplicates", True))),
-        ("10", "Conexiones Aria2c", str(config.get("aria2c_connections", 16))),
-        (
-            "11",
-            "Límite velocidad (KB/s)",
-            str(config.get("max_download_speed", 0)) + " (0=sin límite)",
-        ),
-        ("12", "Descargas concurrentes", str(config.get("concurrent_downloads", 3))),
-        ("0", "[red]Volver[/red]", ""),
+        ("Carpeta de descargas", config.get("download_path", "./downloads")),
+        ("Modo de descarga", config.get("download_mode", "ultra")),
+        ("Calidad video por defecto", config.get("default_video_quality", "auto")),
+        ("Formato audio por defecto", config.get("default_audio_format", "mp3")),
+        ("Calidad audio por defecto", f"{config.get('default_audio_bitrate', 192)} kbps"),
+        ("Subtítulos automáticos", str(config.get("auto_subtitle", False))),
+        ("Idiomas subtítulos", ", ".join(config.get("subtitle_languages", ["es", "en"]))),
+        ("Intentos de reintento", str(config.get("retry_attempts", 3))),
+        ("Verificar duplicados", str(config.get("check_duplicates", True))),
+        ("Conexiones Aria2c", str(config.get("aria2c_connections", 16))),
+        ("Límite velocidad (KB/s)", str(config.get("max_download_speed", 0)) + " (0=sin límite)"),
+        ("Descargas concurrentes", str(config.get("concurrent_downloads", 3))),
+        ("Incrustar miniatura", str(config.get("embed_thumbnail", True))),
+        ("Incrustar metadatos", str(config.get("embed_metadata", True))),
+        ("Escribir info.json", str(config.get("write_info_json", False))),
     ]
 
-    for opt, name, value in items:
-        table.add_row(opt, name, str(value))
+    for name, value in items:
+        table.add_row(name, str(value))
 
     return table
 
