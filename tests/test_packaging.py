@@ -18,8 +18,8 @@ SRC = ROOT / "src" / "media_dl"
 
 
 def _module_name(distribution: str) -> str:
-    """'pydantic-settings' -> 'pydantic_settings' (nombre de importación)."""
-    return distribution.replace("-", "_").lower()
+    """'pydantic-settings>=2.1.0' -> 'pydantic_settings' (nombre de importación)."""
+    return re.split(r"[<>=!~\[; ]", distribution, maxsplit=1)[0].replace("-", "_").lower()
 
 
 def _declared_dependencies() -> dict[str, str]:
@@ -159,3 +159,50 @@ class TestCIWorkflow:
         threshold = int(re.search(r"rate >= (\d+)", workflow).group(1))
 
         assert rate >= threshold, f"Cobertura {rate:.1f}% < umbral {threshold}%"
+
+
+class TestPyInstallerSpec:
+    """El spec es la única fuente de verdad de qué entra en el binario."""
+
+    @pytest.fixture
+    def excludes(self) -> list[str]:
+        """Se lee el spec como Python de verdad, no con regex: si no, los
+        nombres citados dentro de comentarios cuentan como exclusiones."""
+        tree = ast.parse((ROOT / "build" / "media_dl.spec").read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.keyword) and node.arg == "excludes":
+                return list(ast.literal_eval(node.value))
+        pytest.fail("El spec ya no tiene excludes=[...]")
+
+    def test_excludes_a_real_dependency(self, excludes):
+        """No se puede excluir algo que pyproject declara como dependencia.
+
+        Excluir 'mutagen' rompía el binario entero: yt-dlp deja de reconocer
+        los formatos de audio de YouTube Music y toda descarga de Spotify
+        moría con un "known to use DRM protection" que no era cierto.
+        """
+        declared = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["dependencies"]
+        names = {_module_name(dep) for dep in declared}
+
+        clash = set(excludes) & names
+        assert not clash, f"El spec excluye dependencias declaradas: {sorted(clash)}"
+
+    def test_entry_point_exists_on_disk(self):
+        """La ruta que empaqueta el spec tiene que existir de verdad.
+
+        ENTRY es os.path.join(ROOT, ...) y ROOT es la carpeta del propio spec,
+        porque PyInstaller inyecta SPECPATH. Se resuelve igual aquí para poder
+        comprobar el fichero sin lanzar PyInstaller.
+        """
+        tree = ast.parse((ROOT / "build" / "media_dl.spec").read_text())
+        call = next(
+            node.value
+            for node in tree.body
+            if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "ENTRY"
+        )
+        assert isinstance(call, ast.Call), "ENTRY ya no es una llamada a os.path.join"
+
+        parts = [
+            str(ROOT) if isinstance(arg, ast.Name) else ast.literal_eval(arg) for arg in call.args
+        ]
+        assert (Path(*parts)).is_file(), f"Entry point inexistente: {parts}"

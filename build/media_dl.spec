@@ -54,7 +54,10 @@ a = Analysis(
         'pykakasi',
         'secretstorage',
         'websockets',
-        'mutagen',
+        # NO excluir 'mutagen': yt-dlp lo necesita para los formatos de audio de
+        # YouTube Music y sin él la descarga de Spotify falla con un falso
+        # "The requested site is known to use DRM protection". Además media-dl
+        # lo usa para incrustar la carátula.
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

@@ -72,8 +72,10 @@ yt-dlp no hace falta ninguna cuenta.
 
 ### Opción 1: Desde el repositorio (la única vía soportada)
 
+El repositorio es privado, así que hace falta tu clave SSH de GitHub.
+
 ```bash
-git clone https://github.com/Usuariojhp/downloader_cli.git
+git clone git@github.com:Usuariojhp/downloader_cli.git
 cd downloader_cli
 python3 -m venv .venv && source .venv/bin/activate   # opcional pero recomendado
 pip install -e .
