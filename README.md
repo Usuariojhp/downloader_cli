@@ -91,13 +91,21 @@ pip install -e ".[dev]"
 
 Cada push a `master` compila un binario autónomo para Linux. Se descarga desde
 la pestaña **Actions** del repo → última ejecución → **Artifacts** →
-`media-dl-linux` (requiere iniciar sesión en GitHub). Son ~180 MB porque
+`media-dl-linux` (requiere iniciar sesión en GitHub). Son ~183 MB porque
 lleva Python y todas las dependencias dentro.
 
 ```bash
 chmod +x media-dl
 ./media-dl doctor     # comprueba que funciona
+./media-dl doctor --strict   # sale con error si le falta alguna extensión
 ```
+
+El binario que publica la CI **incluye** el extra de Spotify, así que las
+descargas de Spotify funcionan igual que con `pip` (verificado: MP3 con la
+portada incrustada). `doctor --strict` existe justo para esto: si alguna vez
+el empaquetado deja fuera una dependencia, el binario lo dice y sale con
+código de error en vez de fingir que está bien. Si compilas tú el spec sin
+instalar `.[spotify]`, `doctor` te avisará de que esa plataforma no está.
 
 Solo para Linux x86-64. Para Windows usa `build\build.bat` (no verificado).
 
