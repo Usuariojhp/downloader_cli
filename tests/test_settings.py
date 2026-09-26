@@ -128,3 +128,42 @@ class TestSingleton:
 
         reset_settings()
         assert get_settings() is not first
+
+
+class TestSpotifyCredentials:
+    def test_spotify_credentials_default_empty(self, tmp_path):
+        settings = make_settings(tmp_path)
+        assert settings.spotify_client_id == ""
+        assert settings.spotify_client_secret == ""
+
+    def test_spotify_credentials_roundtrip(self, tmp_path):
+        settings = make_settings(
+            tmp_path,
+            spotify_client_id="test_client_id",
+            spotify_client_secret="test_client_secret",
+        )
+        settings.save_config()
+
+        reloaded = make_settings(tmp_path)
+        assert reloaded.spotify_client_id == "test_client_id"
+        assert reloaded.spotify_client_secret == "test_client_secret"
+
+    def test_spotify_credentials_env_override(self, tmp_path, monkeypatch):
+        make_settings(tmp_path, spotify_client_id="from_json").save_config()
+
+        monkeypatch.setenv("MEDIA_DL_SPOTIFY_CLIENT_ID", "from_env")
+        monkeypatch.setenv("MEDIA_DL_SPOTIFY_CLIENT_SECRET", "secret_from_env")
+
+        reloaded = Settings(config_dir=tmp_path, db_path=tmp_path / "h.db")
+        assert reloaded.spotify_client_id == "from_env"
+        assert reloaded.spotify_client_secret == "secret_from_env"
+
+    def test_spotify_credentials_in_config_dict(self, tmp_path):
+        settings = make_settings(
+            tmp_path,
+            spotify_client_id="id123",
+            spotify_client_secret="secret123",
+        )
+        saved = settings.to_config_dict()
+        assert saved["spotify_client_id"] == "id123"
+        assert saved["spotify_client_secret"] == "secret123"

@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     embed_metadata: bool = True
     write_info_json: bool = False
 
+    # Spotify API credentials (optional, for higher rate limits)
+    spotify_client_id: str = Field(default="", description="Spotify API Client ID")
+    spotify_client_secret: str = Field(default="", description="Spotify API Client Secret")
+
     model_config = SettingsConfigDict(
         env_prefix="MEDIA_DL_",
         extra="ignore",

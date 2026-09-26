@@ -257,6 +257,37 @@ export MEDIA_DL_MAX_DOWNLOAD_SPEED=5000  # KB/s
 export MEDIA_DL_CONFIG_DIR=~/.config/media-dl  # dónde vive config.json
 ```
 
+### 🔑 Credenciales de Spotify (opcional)
+
+**¿Por qué?** Sin credenciales, media-dl usa la API pública anónima de Spotify:
+- Límites de tasa muy estrictos (IP compartida)
+- A veces falla al obtener metadatos / carátulas
+
+**Con tus credenciales propias:** límites mucho más altos, metadata consistente, cero errores 429.
+
+**Cómo conseguir:**
+1. Ve a [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. "Create App" → nombre cualquiera → guardar
+3. Copia **Client ID** y **Client Secret**
+
+**Dónde ponerlas (elige una):**
+
+```bash
+# Opción A: Variables de entorno (recomendado, no toca archivos)
+export MEDIA_DL_SPOTIFY_CLIENT_ID=tu_client_id
+export MEDIA_DL_SPOTIFY_CLIENT_SECRET=tu_client_secret
+# Añádelas a tu ~/.bashrc o ~/.zshrc para que persistan
+```
+
+```bash
+# Opción B: Archivo de configuración local
+media-dl config set spotify_client_id TU_CLIENT_ID
+media-dl config set spotify_client_secret TU_CLIENT_SECRET
+# Se guarda en ~/.config/media-dl/config.json — **nunca lo subas a git ni lo compartas**
+```
+
+> **Nota:** El binario portable (`dist/media-dl`) también lee `~/.config/media-dl/config.json`. Las credenciales **no** van embebidas en el ejecutable.
+
 ### Modo interactivo — Configuración
 ```
 media-dl interactive

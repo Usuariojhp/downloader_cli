@@ -42,6 +42,8 @@ VALID_KEYS = {
     "embed_thumbnail": ("bool", "Insertar miniatura"),
     "embed_metadata": ("bool", "Insertar metadatos"),
     "write_info_json": ("bool", "Escribir info.json"),
+    "spotify_client_id": ("string", "Spotify Client ID (opcional, mejores límites)"),
+    "spotify_client_secret": ("string", "Spotify Client Secret (opcional)"),
 }
 
 INT_RANGES = {
@@ -133,8 +135,9 @@ def set_config(key: str, value: str | None = None) -> None:
         config_path = settings.save_config()
         repo.log_settings_change(key, old_value, value)
 
+        display_value = "***" if "secret" in key.lower() else value
         show_success_panel(
-            "✅ Configuración Actualizada", f"{key} = {value}\nGuardado en {config_path}"
+            "✅ Configuración Actualizada", f"{key} = {display_value}\nGuardado en {config_path}"
         )
 
     except Exception as e:

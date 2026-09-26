@@ -215,6 +215,14 @@ class TestConfig:
         result = runner.invoke(app, ["config", "set", "nope", "1"])
         assert result.exit_code == 1
 
+    def test_config_set_spotify_secret_masks_value(self, mock_settings_cmd):
+        """Secret values should be masked in output, not logged in plaintext."""
+        result = runner.invoke(app, ["config", "set", "spotify_client_secret", "my_secret"])
+        assert result.exit_code == 0
+        assert "my_secret" not in result.stdout
+        assert "***" in result.stdout
+        assert mock_settings_cmd.spotify_client_secret == "my_secret"
+
 
 def _plano(texto: str) -> str:
     """Deja el texto en una linea, quitando bordes de tabla y espacios.

@@ -66,10 +66,14 @@ class SpotifyExtractor(Extractor):
         if self._spotdl is None:
             from spotdl import Spotdl
 
-            # Initialize with default settings
+            from media_dl.config import get_settings
+
+            settings = get_settings()
+
+            # Initialize with credentials if provided (for higher rate limits)
             self._spotdl = Spotdl(
-                client_id="",
-                client_secret="",
+                client_id=settings.spotify_client_id or "",
+                client_secret=settings.spotify_client_secret or "",
                 user_auth=False,
                 no_cache=True,
                 headless=True,
