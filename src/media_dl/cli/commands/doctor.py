@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib
+import importlib.metadata
 import shutil
 import subprocess
 import sys
@@ -46,17 +48,34 @@ def _missing(tool: str, consequence: str, installed: bool) -> str:
 
 
 def _check_python_package(pkg: str) -> tuple[bool, str]:
-    """Check if Python package is installed."""
+    """Check if Python package is installed and read its version.
+
+    En el binario congelado importlib.metadata no encuentra nada, así que se
+    prueba también el atributo del propio módulo y su sub-módulo .version
+    (que es como yt-dlp expone la suya).
+    """
     try:
         module = importlib.import_module(pkg)
-        version = getattr(module, "__version__", "Desconocida")
-        return True, version
     except ImportError:
         return False, "No instalado"
 
+    version: str | None = getattr(module, "__version__", None)
+    if not version:
+        with contextlib.suppress(Exception):
+            version = importlib.import_module(f"{pkg}.version").__version__
+    if not version:
+        with contextlib.suppress(Exception):
+            version = importlib.metadata.version(pkg)
+    return True, version or "Desconocida"
 
-def run_doctor(verbose: bool = False) -> None:
-    """Print system diagnostics."""
+
+def _is_portable() -> bool:
+    """True si estamos en el binario de PyInstaller, donde no vale hacer pip."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def run_doctor(verbose: bool = False, strict: bool = False) -> bool:
+    """Print system diagnostics. Devuelve False si algo opcional falta."""
     settings = get_settings()
     show_header("🏥 DIAGNÓSTICO DEL SISTEMA", "media-dl Cyan Edition")
 
@@ -112,20 +131,21 @@ def run_doctor(verbose: bool = False) -> None:
     )
 
     # Optional
+    portable = _is_portable()
+    spotify_hint = (
+        "Spotify: no incluido en este binario"
+        if portable
+        else "Spotify (pip install 'media-dl[spotify]')"
+    )
+    soundcloud_hint = (
+        "SoundCloud: no incluido en este binario"
+        if portable
+        else "SoundCloud (pip install 'media-dl[soundcloud]')"
+    )
     table.add_row("", "", "", "")
     table.add_row("[bold]Extensiones Opcionales[/bold]", "", "", "")
-    table.add_row(
-        "spotdl",
-        "✅" if spotdl_ok else "⚠️",
-        spotdl_ver,
-        "Spotify (pip install 'media-dl[spotify]')",
-    )
-    table.add_row(
-        "scdl",
-        "✅" if scdl_ok else "⚠️",
-        scdl_ver,
-        "SoundCloud (pip install 'media-dl[soundcloud]')",
-    )
+    table.add_row("spotdl", "✅" if spotdl_ok else "⚠️", spotdl_ver, spotify_hint)
+    table.add_row("scdl", "✅" if scdl_ok else "⚠️", scdl_ver, soundcloud_hint)
 
     # Paths
     table.add_row("", "", "", "")
@@ -140,13 +160,31 @@ def run_doctor(verbose: bool = False) -> None:
     all_required = all([ytdlp_ok, rich_ok, typer_ok, pydantic_ok, sqlite_ok])
     external_ok = aria2c_ok and ffmpeg_ok
 
-    if all_required and external_ok:
+    # Una extensión opcional rota no impide usar el programa, pero en el
+    # binario significa que el spec la ha dejado fuera: hay que decirlo en
+    # vez de celebrar un "Sistema Listo" que luego no descarga de Spotify.
+    broken_extras = [
+        name
+        for name, ok in (
+            ("spotdl (Spotify)", spotdl_ok),
+            ("scdl (SoundCloud)", scdl_ok),
+        )
+        if not ok
+    ]
+    extra_note = ""
+    if broken_extras:
+        extra_note = (
+            f"\n\nExtensiones que NO funcionan: {', '.join(broken_extras)}. "
+            "Las demás descargas no se ven afectadas."
+        )
+
+    if all_required and external_ok and not broken_extras:
         show_success_panel(
             "✅ Sistema Listo",
             "Todos los componentes requeridos están disponibles.\n"
             "Las descargas ultra rápidas (aria2c) y conversión (ffmpeg) funcionarán.",
         )
-    elif all_required:
+    elif all_required and not broken_extras:
         show_warning_panel(
             "⚠️ Sistema Parcial",
             "Componentes principales OK, pero faltan herramientas externas:\n"
@@ -156,6 +194,11 @@ def run_doctor(verbose: bool = False) -> None:
             "  • Ubuntu/Debian: sudo apt install aria2 ffmpeg\n"
             "  • macOS: brew install aria2 ffmpeg\n"
             "  • Windows: choco install aria2 ffmpeg",
+        )
+    elif all_required:
+        show_warning_panel(
+            "✅ Sistema Listo, pero sin algunas extensiones",
+            f"Lo esencial funciona: descargar, convertir y guardar en el historial.{extra_note}",
         )
     else:
         show_error_panel(
@@ -168,6 +211,8 @@ def run_doctor(verbose: bool = False) -> None:
         console.print(f"  Platform: {sys.platform}")
         console.print(f"  Executable: {sys.executable}")
         console.print(f"  Config: {settings.config_file}")
+
+    return not (broken_extras or not all_required or not external_ok)
 
 
 def update_deps() -> None:
@@ -201,9 +246,14 @@ def update_deps() -> None:
 @app.callback(invoke_without_command=True)
 def doctor(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Información detallada"),
+    strict: bool = typer.Option(
+        False, "--strict", help="Sale con error si falta alguna extensión opcional"
+    ),
 ) -> None:
     """Ejecutar diagnóstico del sistema"""
-    run_doctor(verbose)
+    healthy = run_doctor(verbose, strict)
+    if strict and not healthy:
+        raise typer.Exit(1)
 
 
 @app.command("update")

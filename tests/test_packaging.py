@@ -187,6 +187,22 @@ class TestPyInstallerSpec:
         clash = set(excludes) & names
         assert not clash, f"El spec excluye dependencias declaradas: {sorted(clash)}"
 
+    def test_ci_build_installs_the_optional_extras(self):
+        """El binario de la CI se construye con los extras, no solo con lo básico.
+
+        Compilar con 'pip install -e .' deja fuera spotdl, así que el
+        artefacto de cada push era un binario que no podía descargar de
+        Spotify mientras el README lo daba por soportado.
+        """
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        assert ".[spotify" in workflow, "La CI compila el binario sin el extra de Spotify"
+        assert "media_dl.spec" in workflow
+
+    def test_ci_checks_the_built_binary_in_strict_mode(self):
+        """Con --strict, doctor falla si al binario le falta una extensión."""
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        assert "doctor --strict" in workflow
+
     def test_entry_point_exists_on_disk(self):
         """La ruta que empaqueta el spec tiene que existir de verdad.
 

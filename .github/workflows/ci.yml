@@ -75,7 +75,10 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e . pyinstaller
+          # Con los extras: el binario debe traer Spotify y SoundCloud, que
+          # es lo que promete el README. Sin 'spotify', spotdl ni siquiera
+          # entra y el binario se queda sin esa plataforma.
+          python -m pip install -e ".[spotify,soundcloud]" pyinstaller
 
       - name: Compilar
         run: pyinstaller --clean --noconfirm build/media_dl.spec
@@ -84,6 +87,12 @@ jobs:
         run: |
           ./dist/media-dl --version
           ./dist/media-dl doctor
+
+      - name: Comprobar que el binario trae las extensiones
+        # Un exclude mal puesto en el spec (websockets, mutagen) rompe el
+        # binario entero y no se ve ni con los tests ni con doctor, que
+        # siempre salía con 0. Con --strict esto falla si falta algo.
+        run: ./dist/media-dl doctor --strict
 
       - uses: actions/upload-artifact@v4
         with:

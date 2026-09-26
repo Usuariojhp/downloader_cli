@@ -1,5 +1,8 @@
 """Tests for CLI commands."""
 
+import importlib
+import re
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -213,6 +216,17 @@ class TestConfig:
         assert result.exit_code == 1
 
 
+def _plano(texto: str) -> str:
+    """Deja el texto en una linea, quitando bordes de tabla y espacios.
+
+    Rich parte los textos largos en varias lineas y mete los bordes de la
+    tabla entre los trozos, asi que sin limpiar no se puede comprobar si
+    una frase aparece.
+    """
+    limpio = re.sub(r"[\u2502-\u257f\s]+", " ", texto)
+    return re.sub(r"\s+", " ", limpio).strip()
+
+
 class TestDoctor:
     def test_doctor_command(self):
         with (
@@ -224,6 +238,61 @@ class TestDoctor:
             result = runner.invoke(app, ["doctor"])
             assert result.exit_code == 0
             assert "DIAGNÓSTICO" in result.stdout or "diagnostico" in result.stdout.lower()
+
+    def test_broken_extra_is_not_reported_as_all_ready(self):
+        """Sin spotdl no se puede descargar de Spotify, y hay que decirlo.
+
+        Celebrar un "Sistema Listo" con Spotify roto lleva al usuario a
+        pensar que el binario va bien cuando no va: fue exactamente lo que
+        pasó con el spec, que dejaba websockets fuera y rompia 'import
+        spotdl' sin que nada lo delatara salvo esta tabla.
+        """
+        real_import = importlib.import_module
+
+        def solo_sin_spotdl(nombre, *args, **kwargs):
+            if nombre == "spotdl":
+                raise ImportError("No instalado")
+            return real_import(nombre, *args, **kwargs)
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/aria2c"),
+            patch("importlib.import_module", side_effect=solo_sin_spotdl),
+        ):
+            result = runner.invoke(app, ["doctor"])
+
+        assert result.exit_code == 0
+        assert "NO funcionan" in _plano(result.stdout)
+        assert "spotdl (Spotify)" in _plano(result.stdout)
+
+    def test_healthy_system_says_ready(self):
+        with (
+            patch("shutil.which", return_value="/usr/bin/aria2c"),
+            patch("importlib.import_module") as mock_import,
+        ):
+            mock_import.return_value.__version__ = "2024.1.0"
+            result = runner.invoke(app, ["doctor"])
+
+        assert "Sistema Listo" in _plano(result.stdout)
+        assert "NO funcionan" not in _plano(result.stdout)
+
+    def test_frozen_binary_does_not_advise_pip(self):
+        """En el binario portable no se puede hacer pip install: no lo digas."""
+        real_import = importlib.import_module
+
+        def solo_sin_spotdl(nombre, *args, **kwargs):
+            if nombre == "spotdl":
+                raise ImportError("No instalado")
+            return real_import(nombre, *args, **kwargs)
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/aria2c"),
+            patch("importlib.import_module", side_effect=solo_sin_spotdl),
+            patch.object(sys, "frozen", True, create=True),
+        ):
+            result = runner.invoke(app, ["doctor"])
+
+        assert "no incluido en este binario" in _plano(result.stdout)
+        assert "pip install" not in _plano(result.stdout)
 
 
 class TestMain:
