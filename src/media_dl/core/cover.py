@@ -52,16 +52,29 @@ def _decode_data_url(image_url: str) -> bytes | None:
         return None
 
 
-def _fetch(image_url: str) -> bytes | None:
-    """Download a cover image. Returns None instead of raising."""
+def _fetch(image_url: str) -> tuple[bytes | None, str]:
+    """Download a cover image, with the reason if it could not be fetched.
+
+    Devolver solo los bytes hacia el fallo al `except` de urllib, que se
+    tragaba el motivo. Con SSL eso es un agujero: 'no se pudo descargar la
+    imagen' no dice si fue un 404, un certificado que no valida o la red.
+    """
     if image_url.startswith("data:"):
-        return _decode_data_url(image_url)
+        image = _decode_data_url(image_url)
+        if image is None:
+            return None, "data: URL de imagen no válida"
+        return image, "ok"
+
     request = urllib.request.Request(image_url, headers={"User-Agent": "media-dl"})
     try:
         with urllib.request.urlopen(request, timeout=_TIMEOUT) as response:
-            return response.read()  # type: ignore[no-any-return]
-    except (urllib.error.URLError, OSError, ValueError):
-        return None
+            return response.read(), "ok"
+    except urllib.error.HTTPError as exc:
+        return None, f"HTTP {exc.code} al pedir la imagen"
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        # ssl.SSLError y SSLCertVerificationError entran por aquí como OSError,
+        # que es justo el caso que hay que poder leer en el aviso.
+        return None, f"{type(exc).__name__}: {exc}"
 
 
 def has_cover(path: Path) -> bool:
@@ -117,9 +130,9 @@ def explain_embed_cover(path: Path, image_url: str | None) -> tuple[bool, str]:
     if has_cover(path):
         return True, "ya tenía portada"
 
-    image = _fetch(image_url)
+    image, fetch_reason = _fetch(image_url)
     if not image:
-        return False, "no se pudo descargar la imagen"
+        return False, fetch_reason
 
     suffix = path.suffix.lower()
 

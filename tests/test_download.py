@@ -759,7 +759,7 @@ class TestCoverEmbedding:
             patch("media_dl.cli.commands.download._run_async", return_value=info),
             patch("media_dl.cli.commands.download._download_with_retry", return_value=str(destino)),
             patch("media_dl.cli.commands.download._can_ask", return_value=False),
-            patch("media_dl.core.cover._fetch", return_value=b"\x89PNG-falso"),
+            patch("media_dl.core.cover._fetch", return_value=(b"\x89PNG-falso", "ok")),
         ):
             run_audio(url=info.url)
 

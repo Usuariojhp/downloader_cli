@@ -59,7 +59,7 @@ class TestEmbedCoverMp3:
         target = _mp3(temp_dir / "cancion.mp3")
         png = _png()
 
-        with patch("media_dl.core.cover._fetch", return_value=png):
+        with patch("media_dl.core.cover._fetch", return_value=(png, "ok")):
             assert embed_cover(target, "https://cdn.example/cover.png") is True
 
         assert has_cover(target) is True
@@ -72,9 +72,9 @@ class TestEmbedCoverMp3:
     def test_replaces_existing_picture(self, temp_dir: Path) -> None:
         target = _mp3(temp_dir / "cancion.mp3")
 
-        with patch("media_dl.core.cover._fetch", return_value=_png((1, 1, 1))):
+        with patch("media_dl.core.cover._fetch", return_value=(_png((1, 1, 1)), "ok")):
             embed_cover(target, "https://cdn.example/a.png")
-        with patch("media_dl.core.cover._fetch", return_value=_png((2, 2, 2))):
+        with patch("media_dl.core.cover._fetch", return_value=(_png((2, 2, 2)), "ok")):
             embed_cover(target, "https://cdn.example/b.png")
 
         from mutagen.id3 import ID3
@@ -86,7 +86,7 @@ class TestEmbedCoverMp3:
         target = _mp3(temp_dir / "cancion.mp3")
         before = target.read_bytes()
 
-        with patch("media_dl.core.cover._fetch", return_value=None):
+        with patch("media_dl.core.cover._fetch", return_value=(None, "no se pudo descargar")):
             assert embed_cover(target, "https://cdn.example/cae.png") is False
 
         assert target.read_bytes() == before
@@ -168,7 +168,7 @@ class TestEmbedCoverEdgeCases:
         target = temp_dir / "cancion.ogg"
         target.write_bytes(b"OggS" + b"\x00" * 64)
 
-        with patch("media_dl.core.cover._fetch", return_value=_png()):
+        with patch("media_dl.core.cover._fetch", return_value=(_png(), "ok")):
             assert embed_cover(target, "https://cdn.example/cover.png") is False
         assert has_cover(target) is False
 
@@ -176,11 +176,11 @@ class TestEmbedCoverEdgeCases:
         from media_dl.core.cover import _fetch
 
         with patch("urllib.request.urlopen", side_effect=OSError("sin red")):
-            assert _fetch("https://cdn.example/cover.png") is None
+            assert _fetch("https://cdn.example/cover.png")[0] is None
 
     def test_fetch_returns_bytes(self) -> None:
         from media_dl.core.cover import _fetch
 
         png = _png()
         with patch("urllib.request.urlopen", return_value=_FakeResponse(png)):
-            assert _fetch("https://cdn.example/cover.png") == png
+            assert _fetch("https://cdn.example/cover.png") == (png, "ok")
