@@ -5,6 +5,7 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  workflow_dispatch:
 
 # Cancela ejecuciones anteriores del mismo ref si hay commits nuevos.
 concurrency:
@@ -99,3 +100,50 @@ jobs:
           name: media-dl-linux
           path: dist/media-dl
           retention-days: 7
+
+  e2e:
+    name: Descarga real (Spotify)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    continue-on-error: true
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar binario
+        uses: actions/download-artifact@v4
+        with:
+          name: media-dl-linux
+          path: bin
+
+      - name: Preparar
+        run: |
+          chmod +x bin/media-dl
+          mkdir -p test_e2e
+
+      - name: Descarga real de Spotify
+        run: |
+          cd test_e2e
+          ../bin/media-dl download audio -F "https://open.spotify.com/track/70LcF31zb1H0PyJoS1Sx1r" -o . 2>&1 | tee download.log
+          EXIT=$?
+          echo "EXIT_CODE=$EXIT" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verificar carátula
+        run: |
+          cd test_e2e
+          mp3=$(ls *.mp3 2>/dev/null | head -1)
+          if [ -z "$mp3" ]; then
+            echo "❌ **No se descargó ningún MP3**" >> $GITHUB_STEP_SUMMARY
+          else
+            python3 ../../scripts/check_cover.py "$mp3"
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "====" >> $GITHUB_STEP_SUMMARY
+          echo "Log de descarga" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -20 download.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Asegurar exit 0
+        run: exit 0

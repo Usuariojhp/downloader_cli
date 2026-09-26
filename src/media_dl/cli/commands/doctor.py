@@ -93,9 +93,10 @@ def run_doctor(verbose: bool = False) -> bool:
     mutagen_ok, mutagen_ver = _check_python_package("mutagen.id3")
     # Import estatico a proposito: si se perdiera al empaquetar, el self_test
     # de abajo lo cuenta y el --strict de la CI pone el build en rojo.
-    from media_dl.core.cover import self_test as cover_self_test
+    from media_dl.core.cover import self_test as cover_self_test, ca_status
 
     cover_ok, cover_reason = cover_self_test()
+    ca_ok, ca_reason = ca_status()
     # SQLite is built-in
     sqlite_ok, sqlite_ver = True, "built-in (sqlite3)"
 
@@ -135,6 +136,12 @@ def run_doctor(verbose: bool = False) -> bool:
         cover_reason,
         "Prueba real de escritura, sin red",
     )
+    table.add_row(
+        "Certificados TLS",
+        "✅" if ca_ok else "❌",
+        ca_reason,
+        "Fuente de CA disponible para urllib",
+    )
 
     # External tools
     table.add_row("", "", "", "")
@@ -173,7 +180,9 @@ def run_doctor(verbose: bool = False) -> bool:
     console.print(table)
 
     # Summary
-    all_required = all([ytdlp_ok, rich_ok, typer_ok, pydantic_ok, sqlite_ok, mutagen_ok, cover_ok])
+    all_required = all(
+        [ytdlp_ok, rich_ok, typer_ok, pydantic_ok, sqlite_ok, mutagen_ok, cover_ok, ca_ok]
+    )
     external_ok = aria2c_ok and ffmpeg_ok
 
     # Una extensión opcional rota no impide usar el programa, pero en el

@@ -212,6 +212,48 @@ def explain_embed_cover(path: Path, image_url: str | None) -> tuple[bool, str]:
     return False, f"contenedor no soportado ({suffix or 'sin extensión'})"
 
 
+def ca_status() -> tuple[bool, str]:
+    """Return (ok, detail) indicating if this process can verify HTTPS certs.
+
+    No hace un handshake real (requeriría red). En su lugar comprueba que
+    exista ALGUNA fuente de CA en el filesystem:
+
+    - Un certifi empaquetado en el bundle (PyInstaller pone SSL_CERT_FILE)
+    - La variable SSL_CERT_FILE apuntando a un archivo existente
+    - Las rutas por defecto de OpenSSL (cafile o capath existentes)
+
+    Si NINGUNA existe, `urllib.request.urlopen` fallará con
+    CERTIFICATE_VERIFY_FAILED en cualquier HTTPS. Eso es un defecto real
+    del empaquetado, no un capricho de red.
+
+    Contar certificados con create_default_context() NO sirve: devuelve 0
+    incluso en sistemas donde HTTPS funciona (OpenSSL puebla el almacén
+    de forma perezosa).
+    """
+    # 1) Bundled certifi inside the frozen app
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        bundled = Path(meipass) / "certifi" / "cacert.pem"
+        if bundled.is_file():
+            return True, f"certifi empaquetado ({bundled.name})"
+
+    # 2) Explicit SSL_CERT_FILE env var
+    env_cert = os.environ.get("SSL_CERT_FILE", "")
+    if env_cert and Path(env_cert).is_file():
+        return True, f"SSL_CERT_FILE={env_cert}"
+
+    # 3) System default verify paths
+    verify_paths = ssl.get_default_verify_paths()
+    cafile = getattr(verify_paths, "openssl_cafile", "")
+    capath = getattr(verify_paths, "openssl_capath", "")
+    if cafile and Path(cafile).is_file():
+        return True, f"CA del sistema: {Path(cafile).name}"
+    if capath and Path(capath).is_dir():
+        return True, f"CA dir del sistema: {Path(capath).name}"
+
+    return False, "NINGUNA fuente de CA encontrada: HTTPS por urllib fallará"
+
+
 def self_test() -> tuple[bool, str]:
     """Check that cover embedding really works here, with no network involved.
 

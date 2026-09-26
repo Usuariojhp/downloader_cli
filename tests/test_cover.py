@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import struct
+import tempfile
 import sys
 import zlib
 from pathlib import Path
@@ -234,3 +235,56 @@ class TestEmbedCoverEdgeCases:
         png = _png()
         with patch("urllib.request.urlopen", return_value=_FakeResponse(png)):
             assert _fetch("https://cdn.example/cover.png") == (png, "ok")
+
+    def test_ca_status_with_bundled_certifi(self) -> None:
+        """Si hay un certifi empaquetado en el bundle, ca_status lo usa."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ca_dir = Path(tmp) / "certifi"
+            ca_dir.mkdir()
+            ca_file = ca_dir / "cacert.pem"
+            ca_file.write_text("-----BEGIN CERTIFICATE-----\n")
+            with patch.object(sys, "_MEIPASS", tmp, create=True):
+                ok, reason = cover_module.ca_status()
+            assert ok is True
+            assert "certifi" in reason
+
+    def test_ca_status_with_ssl_cert_file_env(self) -> None:
+        """SSL_CERT_FILE apuntando a un archivo existente es suficiente."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ca = Path(tmp) / "cacert.pem"
+            ca.write_text("-----BEGIN CERTIFICATE-----\n")
+            with (
+                patch.dict(os.environ, {"SSL_CERT_FILE": str(ca)}),
+                patch.object(sys, "_MEIPASS", None, create=True),
+            ):
+                ok, reason = cover_module.ca_status()
+            assert ok is True
+            assert "SSL_CERT_FILE" in reason
+
+    def test_ca_status_uses_system_default_when_no_bundle(self) -> None:
+        """Sin bundle ni env, usa las rutas por defecto del sistema."""
+        with (
+            patch.object(sys, "_MEIPASS", None, create=True),
+            patch.dict(os.environ, {}, clear=True),
+            patch("media_dl.core.cover.ssl.get_default_verify_paths") as vpaths,
+        ):
+            vpaths.return_value = type(
+                "obj", (), {"openssl_cafile": certifi.where(), "openssl_capath": ""}
+            )()
+            ok, reason = cover_module.ca_status()
+            assert ok is True
+            assert "CA del sistema" in reason
+
+    def test_ca_status_fails_when_no_source_exists(self) -> None:
+        """Si no hay NINGUNA fuente de CA, HTTPS por urllib está roto."""
+        with (
+            patch.object(sys, "_MEIPASS", None, create=True),
+            patch.dict(os.environ, {}, clear=True),
+            patch("media_dl.core.cover.ssl.get_default_verify_paths") as vpaths,
+        ):
+            vpaths.return_value = type(
+                "obj", (), {"openssl_cafile": "/no/existe.pem", "openssl_capath": "/no/existe"}
+            )()
+            ok, reason = cover_module.ca_status()
+            assert ok is False
+            assert "NINGUNA" in reason
