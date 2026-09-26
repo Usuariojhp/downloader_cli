@@ -91,6 +91,11 @@ def run_doctor(verbose: bool = False) -> bool:
     # embed_cover se traga la excepcion, se pierde en silencio. Ponerlo
     # aqui lo convierte en fallo visible de --strict.
     mutagen_ok, mutagen_ver = _check_python_package("mutagen.id3")
+    # Import estatico a proposito: si se perdiera al empaquetar, el self_test
+    # de abajo lo cuenta y el --strict de la CI pone el build en rojo.
+    from media_dl.core.cover import self_test as cover_self_test
+
+    cover_ok, cover_reason = cover_self_test()
     # SQLite is built-in
     sqlite_ok, sqlite_ver = True, "built-in (sqlite3)"
 
@@ -124,6 +129,12 @@ def run_doctor(verbose: bool = False) -> bool:
     )
     table.add_row("sqlite3", "✅" if sqlite_ok else "❌", sqlite_ver, "Base de datos (built-in)")
     table.add_row("mutagen", "✅" if mutagen_ok else "❌", mutagen_ver, "Carátulas incrustadas")
+    table.add_row(
+        "Portada (self-test)",
+        "✅" if cover_ok else "❌",
+        cover_reason,
+        "Prueba real de escritura, sin red",
+    )
 
     # External tools
     table.add_row("", "", "", "")
@@ -162,7 +173,7 @@ def run_doctor(verbose: bool = False) -> bool:
     console.print(table)
 
     # Summary
-    all_required = all([ytdlp_ok, rich_ok, typer_ok, pydantic_ok, sqlite_ok, mutagen_ok])
+    all_required = all([ytdlp_ok, rich_ok, typer_ok, pydantic_ok, sqlite_ok, mutagen_ok, cover_ok])
     external_ok = aria2c_ok and ffmpeg_ok
 
     # Una extensión opcional rota no impide usar el programa, pero en el
