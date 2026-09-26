@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import struct
+import sys
 import zlib
 from pathlib import Path
 from unittest.mock import patch
+
+import certifi
 
 from media_dl.core import cover as cover_module
 from media_dl.core.cover import (
@@ -151,6 +155,52 @@ class TestEmbedCoverEdgeCases:
             ok, reason = self_test()
         assert ok is True, reason
         assert reason == "portada incrustada"
+
+    def test_uses_the_bundled_ca_in_a_frozen_binary(self) -> None:
+        """En el bundle hay que darle a urllib la CA que va dentro.
+
+        PyInstaller solo mete certifi como dato y fija SSL_CERT_FILE, pero no
+        lo importa al PYZ, así que un urlopen a secas se queda sin emisor y
+        falla con CERTIFICATE_VERIFY_FAILED. Pasó en el binario de la CI: el
+        audio llegaba (va por requests/httpx, que sí usan certifi) y la
+        portada no.
+        """
+        ca = certifi.where()
+        with (
+            patch.dict(os.environ, {"SSL_CERT_FILE": ca}),
+            patch.object(sys, "_MEIPASS", "", create=True),
+            patch("media_dl.core.cover.urllib.request.urlopen") as urlopen,
+        ):
+            urlopen.return_value.__enter__.return_value.read.return_value = b"imagen"
+            _imagen, motivo = cover_module._fetch("https://cdn.example/c.jpg")
+
+        assert motivo == "ok"
+        assert urlopen.call_args.kwargs["context"] is not None
+
+    def test_a_broken_ca_path_falls_back_instead_of_failing(self) -> None:
+        """Un SSL_CERT_FILE que no vale no puede tumbar la descarga."""
+        with (
+            patch.dict(os.environ, {"SSL_CERT_FILE": "/no/existe/cacert.pem"}, clear=False),
+            patch("media_dl.core.cover.urllib.request.urlopen") as urlopen,
+        ):
+            urlopen.return_value.__enter__.return_value.read.return_value = b"imagen"
+            _imagen, motivo = cover_module._fetch("https://cdn.example/c.jpg")
+
+        assert motivo == "ok"
+        assert urlopen.call_args.kwargs["context"] is None
+
+    def test_without_a_bundled_ca_it_uses_the_system_one(self) -> None:
+        """Fuera del bundle, urllib se apaña con la CA del sistema."""
+        with (
+            patch.dict(os.environ, {"SSL_CERT_FILE": "/no/existe/cacert.pem"}, clear=False),
+            patch.object(sys, "_MEIPASS", "", create=True),
+            patch("media_dl.core.cover.urllib.request.urlopen") as urlopen,
+        ):
+            urlopen.return_value.__enter__.return_value.read.return_value = b"imagen"
+            _imagen, motivo = cover_module._fetch("https://cdn.example/c.jpg")
+
+        assert motivo == "ok"
+        assert urlopen.call_args.kwargs["context"] is None
 
     def test_data_url_images_need_no_network(self, temp_dir: Path) -> None:
         target = _mp3(temp_dir / "cancion.mp3")

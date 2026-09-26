@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import os
+import ssl
+import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -52,6 +55,29 @@ def _decode_data_url(image_url: str) -> bytes | None:
         return None
 
 
+def _bundled_ca_file() -> str | None:
+    """Return certifi's ``cacert.pem`` when running from a frozen bundle.
+
+    PyInstaller sets ``SSL_CERT_FILE`` to certifi's ``cacert.pem`` in the
+    bundle, but only ships certifi as data and does not import it. A plain
+    ``urllib`` call then has no issuer certificate to validate against:
+
+        CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate
+
+    while every other download works, because yt-dlp and spotdl go through
+    requests/httpx, which import certifi from the PYZ and get their own copy.
+    That is why the audio arrived and the cover silently did not.
+    """
+    candidate = os.environ.get("SSL_CERT_FILE", "")
+    if candidate and Path(candidate).is_file():
+        return candidate
+    meipass = getattr(sys, "_MEIPASS", None)
+    if not meipass:
+        return None
+    bundled = Path(meipass) / "certifi" / "cacert.pem"
+    return str(bundled) if bundled.is_file() else None
+
+
 def _fetch(image_url: str) -> tuple[bytes | None, str]:
     """Download a cover image, with the reason if it could not be fetched.
 
@@ -66,8 +92,17 @@ def _fetch(image_url: str) -> tuple[bytes | None, str]:
         return image, "ok"
 
     request = urllib.request.Request(image_url, headers={"User-Agent": "media-dl"})
+    context = None
+    ca_file = _bundled_ca_file()
+    if ca_file:
+        try:
+            context = ssl.create_default_context(cafile=ca_file)
+        except (OSError, ValueError):
+            # Sin CA utilizable se va con la que traiga el sistema, que es lo
+            # que se ha usado siempre.
+            context = None
     try:
-        with urllib.request.urlopen(request, timeout=_TIMEOUT) as response:
+        with urllib.request.urlopen(request, timeout=_TIMEOUT, context=context) as response:
             return response.read(), "ok"
     except urllib.error.HTTPError as exc:
         return None, f"HTTP {exc.code} al pedir la imagen"
