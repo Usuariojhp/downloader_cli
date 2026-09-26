@@ -24,6 +24,7 @@ from rich.progress import (
 )
 
 from media_dl.config import Settings, get_settings
+from media_dl.core.cover import embed_cover
 from media_dl.core.exceptions import DownloadError, MediaDLError
 from media_dl.core.extractors import get_extractor
 from media_dl.core.history import HistoryRepository
@@ -499,6 +500,9 @@ def run_audio(
             return
 
         file_size = file_path.stat().st_size
+
+        if settings.embed_thumbnail:
+            embed_cover(file_path, info.thumbnail)
 
         repo.add(
             url=url,

@@ -32,6 +32,7 @@ dependencies = [
     "pydantic-settings>=2.1.0",
     "platformdirs>=4.0.0",
     "httpx>=0.25.0",
+    "mutagen>=1.47.0",
 ]
 
 [project.optional-dependencies]
@@ -122,6 +123,18 @@ module = [
 ]
 ignore_missing_imports = true
 follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+# mutagen ships no stubs at all: every call is untyped, so the strict
+# untyped-call rules have to be relaxed for this module only.
+module = [
+    "mutagen",
+    "mutagen.*",
+]
+ignore_missing_imports = true
+disallow_untyped_calls = false
+disallow_untyped_defs = false
+warn_return_any = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

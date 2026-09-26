@@ -25,7 +25,7 @@ extremo contra la plataforma real, no solo si el extractor existe.
 | YouTube | ✅ | ✅ | ✅ | Sí | Vídeo, MP3, subtítulos, 4K, playlists |
 | TikTok | ✅ | ✅ | ❌ | Sí | API tikwn con degradación a yt-dlp |
 | Facebook | ✅ | ✅ | ❌ | Sí | Vídeos públicos (fb.watch) |
-| Spotify | ❌ | ✅ | ✅ | Sí | Busca el audio en YouTube Music; necesita `spotdl` |
+| Spotify | ❌ | ✅ | ✅ | Sí | Busca el audio en YouTube Music; necesita `spotdl`; incrusta la carátula |
 | SoundCloud | ❌ | ✅ | ✅ | No | Metadatos con `scdl`, descarga con yt-dlp |
 | Instagram | ⚠️ | ⚠️ | ❌ | No | Ver [Instagram](#instagram-y-x-requieren-cuenta) |
 | Twitter/X | ⚠️ | ⚠️ | ❌ | No | Ver [Instagram](#instagram-y-x-requieren-cuenta) |
@@ -212,6 +212,12 @@ media-dl interactive
   "embed_metadata": true
 }
 ```
+
+`embed_thumbnail` incrusta la imagen dentro del archivo. yt-dlp solo puede
+hacerlo si la fuente trae la imagen adjunta, y el audio que llega de YouTube
+Music para Spotify no la trae, así que media-dl la baja aparte de la
+portada que da el extractor y la pega al final. Si la carátula no se puede
+descargar, la descarga **no** falla: el archivo se guarda sin imagen.
 
 ### Variables de entorno
 Tienen prioridad sobre `config.json`.

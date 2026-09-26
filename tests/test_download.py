@@ -17,6 +17,7 @@ from media_dl.cli.commands.download import (
     run_video,
 )
 from media_dl.config import Settings
+from media_dl.core.cover import has_cover
 from media_dl.core.models import DownloadRequest, Format, MediaInfo
 
 
@@ -669,3 +670,83 @@ class TestMediaUrl:
             run_video(url=info.url)
 
         assert download.call_args.args[0] == "https://youtube.com/watch?v=abc"
+
+
+class TestCoverEmbedding:
+    """La carátula que da el extractor debe acabar dentro del archivo.
+
+    Spotify sí entrega la URL de la portada, pero el audio viene de YouTube
+    Music sin imagen adjunta, así que el postprocesador de yt-dlp no tiene
+    nada que incrustar. Sin este paso el archivo salía sin carátula.
+    """
+
+    @pytest.fixture
+    def info(self):
+        return MediaInfo(
+            id="abc",
+            title="Creep",
+            url="https://open.spotify.com/track/abc",
+            platform="Spotify",
+            duration=237,
+            thumbnail="https://i.scdn.co/image/ab67616d0000b273",
+            media_url="https://music.youtube.com/watch?v=xyz",
+        )
+
+    def _run(self, info, settings, fn):
+        repo = MagicMock()
+        repo.is_duplicate.return_value = None
+        strategy = MagicMock()
+        strategy.is_available.return_value = True
+        strategy.build_args.return_value = {}
+        destino = settings.download_path / "Creep.mp3"
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"\xff\xfb\x90\x64" + b"\x00" * 64)
+
+        with (
+            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("media_dl.cli.commands.download.get_extractor"),
+            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch("media_dl.cli.commands.download._download_with_retry", return_value=str(destino)),
+            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+            patch("media_dl.cli.commands.download.embed_cover") as embed,
+        ):
+            fn(url=info.url)
+        return embed, destino
+
+    def test_audio_embeds_the_thumbnail(self, info, settings):
+        embed, destino = self._run(info, settings, run_audio)
+        embed.assert_called_once()
+        assert embed.call_args.args[0] == destino
+        assert embed.call_args.args[1] == "https://i.scdn.co/image/ab67616d0000b273"
+
+    def test_respects_the_embed_thumbnail_setting(self, info, settings):
+        settings.embed_thumbnail = False
+        embed, _destino = self._run(info, settings, run_audio)
+        embed.assert_not_called()
+
+    def test_really_writes_the_cover(self, info, settings):
+        """Sin parches: el archivo descargado acaba con la imagen dentro."""
+        repo = MagicMock()
+        repo.is_duplicate.return_value = None
+        strategy = MagicMock()
+        strategy.is_available.return_value = True
+        strategy.build_args.return_value = {}
+        destino = settings.download_path / "Creep.mp3"
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"\xff\xfb\x90\x64" + b"\x00" * 64)
+
+        with (
+            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("media_dl.cli.commands.download.get_extractor"),
+            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch("media_dl.cli.commands.download._download_with_retry", return_value=str(destino)),
+            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+            patch("media_dl.core.cover._fetch", return_value=b"\x89PNG-falso"),
+        ):
+            run_audio(url=info.url)
+
+        assert has_cover(destino) is True
