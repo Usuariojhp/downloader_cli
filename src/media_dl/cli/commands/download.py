@@ -66,11 +66,12 @@ def _run_async(coro: Coroutine[Any, Any, T]) -> T:
     return loop.run_until_complete(coro)
 
 
-BEST_VIDEO = "bestvideo+bestaudio/best"
+# Format selector that works when extractor skips dash/hls (only format 18 available)
+BEST_VIDEO = "best[protocol=https]/best"
 
 
 def _height_selector(height: int) -> str:
-    return f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+    return f"best[height<={height}][protocol=https]/best"
 
 
 def _select_video_quality(info: MediaInfo, settings: Settings, quality: str | None = None) -> str:
@@ -168,6 +169,12 @@ def _build_ydl_opts(
         "no_warnings": True,
         "retries": settings.retry_attempts,
         "fragment_retries": settings.retry_attempts,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "tv_embedded", "web"],
+                "skip": ["dash", "hls"],
+            }
+        },
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
