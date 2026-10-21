@@ -2,8 +2,8 @@
 
 **Cyan Edition v3.0.0** - Descargador multimedia unificado con interfaz moderna en tonos cian.
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue)](https://github.com/Usuariojhp/downloader_cli)
-[![CI](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue)](https://github.com/Usuariojhp/veluz_downloader)
+[![CI](https://github.com/Usuariojhp/veluz_downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/Usuariojhp/veluz_downloader/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11+-green)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -90,8 +90,8 @@ veluz doctor
 El repositorio es público:
 
 ```bash
-git clone https://github.com/Usuariojhp/downloader_cli.git
-cd downloader_cli
+git clone https://github.com/Usuariojhp/veluz_downloader.git
+cd veluz_downloader
 python3 -m venv .venv && source .venv/bin/activate   # opcional pero recomendado
 pip install -e .
 ```
@@ -102,8 +102,8 @@ entorno del sistema:
 ```bash
 pkg update && pkg upgrade
 pkg install python git aria2 ffmpeg
-git clone https://github.com/Usuariojhp/downloader_cli.git
-cd downloader_cli
+git clone https://github.com/Usuariojhp/veluz_downloader.git
+cd veluz_downloader
 python -m pip install --no-build-isolation -e .
 veluz doctor
 ```
@@ -554,9 +554,9 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 
 ## 💬 Soporte
 
-- **Errores**: [GitHub Issues](https://github.com/Usuariojhp/downloader_cli/issues/new/choose)
-- **Preguntas**: [nueva pregunta](https://github.com/Usuariojhp/downloader_cli/issues/new/choose)
-- **Estado de las pruebas**: [CI en GitHub Actions](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml)
+- **Errores**: [GitHub Issues](https://github.com/Usuariojhp/veluz_downloader/issues/new/choose)
+- **Preguntas**: [nueva pregunta](https://github.com/Usuariojhp/veluz_downloader/issues/new/choose)
+- **Estado de las pruebas**: [CI en GitHub Actions](https://github.com/Usuariojhp/veluz_downloader/actions/workflows/ci.yml)
 
 Es un proyecto personal y el soporte es limitado: si algo falla, abre una issue
 con la salida de `veluz doctor` y el comando exacto que ejecutaste.
