@@ -52,7 +52,7 @@ class TestSelectVideoQuality:
 
     def test_exact_height(self, info, settings):
         assert _select_video_quality(info, settings, "720") == (
-            "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+            "best[height<=720][protocol=https]/best"
         )
 
     def test_accepts_suffix_p(self, info, settings):
@@ -554,7 +554,7 @@ class TestNoOverwrite:
         # el archivo previo sigue intacto
         assert original.read_bytes() == b"contenido original"
 
-    def test_no_duplicate_uses_normal_template(self, info, settings):
+    def test_no_duplicate_uses_concrete_stem(self, info, settings):
         repo = MagicMock()
         repo.is_duplicate.return_value = None
         strategy = MagicMock()
@@ -573,7 +573,7 @@ class TestNoOverwrite:
             run_video(url=info.url)
 
         opts = download.call_args.args[1]
-        assert opts["outtmpl"].endswith("%(title).100s [%(id)s].%(ext)s")
+        assert opts["outtmpl"].endswith("Mi vídeo [abc123].%(ext)s")
 
     def test_missing_file_is_not_reported_as_success(self, info, settings, capsys):
         """Si yt-dlp no crea el archivo, no decimos '✅ Completada'."""

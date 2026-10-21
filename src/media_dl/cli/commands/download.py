@@ -29,7 +29,12 @@ from media_dl.core.exceptions import DownloadError, MediaDLError
 from media_dl.core.extractors import get_extractor
 from media_dl.core.history import HistoryRepository
 from media_dl.core.models import DownloadRequest, MediaInfo
-from media_dl.core.progress import create_progress_hook
+from media_dl.core.progress import (
+    create_partial_monitor,
+    create_progress_hook,
+    downloaded_total_from_info,
+    estimate_download_size,
+)
 from media_dl.core.strategies import StrategyFactory, build_strategy_args
 from media_dl.ui import (
     create_media_info_table as show_media_info_table,
@@ -222,11 +227,13 @@ def _download_with_retry(
     progress: Progress,
     task_id: TaskID,
     max_attempts: int,
+    expected_total: int | None = None,
 ) -> str:
     from yt_dlp import YoutubeDL
 
     last_error: Exception | None = None
     for attempt in range(1, max_attempts + 1):
+        monitor = None
         try:
             if attempt > 1:
                 c = get_console()
@@ -234,9 +241,33 @@ def _download_with_retry(
                 time.sleep(2)
 
             ydl_opts["progress_hooks"] = [create_progress_hook(progress, task_id)]
+            # YoutubeDL normalizes outtmpl to a dict in-place; keep the
+            # original value for the .part monitor.
+            outtmpl = ydl_opts.get("outtmpl", "")
 
             with YoutubeDL(ydl_opts) as ydl:  # type: ignore[no-untyped-call]
-                result = ydl.extract_info(url, download=True)
+                # Extract once without downloading: the result already carries
+                # the selected format and its size, so the progress bar gets an
+                # exact total without a second network request.
+                info = ydl.extract_info(url, download=False)
+                actual_total = downloaded_total_from_info(info) or expected_total
+                if actual_total:
+                    progress.update(task_id, completed=0, total=actual_total)
+
+                # aria2c (ultra mode) only reports progress when it exits.
+                # Poll its .part file so the bar moves during the download.
+                if ydl_opts.get("external_downloader"):
+                    monitor = create_partial_monitor(
+                        progress,
+                        task_id,
+                        outtmpl,
+                        actual_total,
+                    )
+                    monitor.start()
+
+                result = ydl.process_ie_result(info, download=True)
+                if monitor:
+                    monitor.complete()
                 return cast(str, ydl.prepare_filename(result))
 
         except Exception as e:
@@ -247,10 +278,18 @@ def _download_with_retry(
                     url=url,
                     cause=e,
                 ) from e
+        finally:
+            if monitor:
+                monitor.stop()
 
     raise DownloadError(
         f"No se intentó la descarga de {url} (intentos: {max_attempts})", url=url, cause=last_error
     ) from last_error
+
+
+def _default_stem(title: str, media_id: str) -> str:
+    """Concrete output stem, matching yt-dlp's default naming template."""
+    return f"{title[:100].strip() or media_id} [{media_id}]"
 
 
 def _output_stem_for(
@@ -345,8 +384,11 @@ def run_video(
             force=force,
         )
 
-        stem = _output_stem_for(info, settings, request, duplicate=duplicate)
+        stem = _output_stem_for(info, settings, request, duplicate=duplicate) or _default_stem(
+            info.title, info.id
+        )
         ydl_opts = _build_ydl_opts(request, strategy_args, settings, stem=stem)
+        expected_total = estimate_download_size(info.formats, "video", format_str)
 
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -356,12 +398,18 @@ def run_video(
             TransferSpeedColumn(),
             TimeRemainingColumn(),
             console=console,
+            refresh_per_second=10,
         ) as progress:
-            task = progress.add_task("[cyan]Descargando...", total=100)
+            task = progress.add_task("[cyan]Descargando...", total=expected_total)
 
             start_time = time.time()
             filepath = _download_with_retry(
-                destino, ydl_opts, progress, task, settings.retry_attempts
+                destino,
+                ydl_opts,
+                progress,
+                task,
+                settings.retry_attempts,
+                expected_total=expected_total,
             )
             duration = time.time() - start_time
 
@@ -473,8 +521,11 @@ def run_audio(
             force=force,
         )
 
-        stem = _output_stem_for(info, settings, request, duplicate=duplicate)
+        stem = _output_stem_for(info, settings, request, duplicate=duplicate) or _default_stem(
+            info.title, info.id
+        )
         ydl_opts = _build_ydl_opts(request, strategy_args, settings, stem=stem)
+        expected_total = estimate_download_size(info.formats, "audio")
 
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -484,12 +535,18 @@ def run_audio(
             TransferSpeedColumn(),
             TimeRemainingColumn(),
             console=console,
+            refresh_per_second=10,
         ) as progress:
-            task = progress.add_task("[cyan]Descargando audio...", total=100)
+            task = progress.add_task("[cyan]Descargando audio...", total=expected_total)
 
             start_time = time.time()
             filepath = _download_with_retry(
-                destino, ydl_opts, progress, task, settings.retry_attempts
+                destino,
+                ydl_opts,
+                progress,
+                task,
+                settings.retry_attempts,
+                expected_total=expected_total,
             )
             duration = time.time() - start_time
 
@@ -584,14 +641,24 @@ def _build_batch_request(
 def _download_batch_item(
     url: str,
     request: DownloadRequest,
+    info: MediaInfo,
     strategy_args: dict[str, Any],
     settings: Settings,
     progress: Progress,
     task_id: TaskID,
+    expected_total: int | None,
 ) -> str:
     """Download one batch entry and return the resulting file path."""
-    ydl_opts = _build_ydl_opts(request, strategy_args, settings)
-    return _download_with_retry(url, ydl_opts, progress, task_id, settings.retry_attempts)
+    stem = _default_stem(info.title, info.id)
+    ydl_opts = _build_ydl_opts(request, strategy_args, settings, stem=stem)
+    return _download_with_retry(
+        url,
+        ydl_opts,
+        progress,
+        task_id,
+        settings.retry_attempts,
+        expected_total=expected_total,
+    )
 
 
 def run_batch(
@@ -687,6 +754,11 @@ def run_batch(
     # Fase 2: descarga en paralelo con una barra de progreso compartida.
     results: dict[str, tuple[DownloadRequest, str, str | None]] = {}
 
+    expected_sizes = {
+        url: estimate_download_size(info.formats, media_type, request.quality or "")
+        for url, request, info in jobs
+    }
+
     with Progress(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(bar_width=24, style="cyan", complete_style="bright_cyan"),
@@ -694,15 +766,26 @@ def run_batch(
         DownloadColumn(),
         TransferSpeedColumn(),
         console=console,
+        refresh_per_second=10,
     ) as progress:
         task_ids = {
-            url: progress.add_task(f"[cyan]{idx}/{len(jobs)} {url[:44]}[/cyan]", total=100)
+            url: progress.add_task(
+                f"[cyan]{idx}/{len(jobs)} {url[:44]}[/cyan]",
+                total=expected_sizes.get(url),
+            )
             for idx, (url, _, _) in enumerate(jobs, 1)
         }
 
-        def _run(url: str, request: DownloadRequest) -> None:
+        def _run(url: str, request: DownloadRequest, info: MediaInfo) -> None:
             filepath = _download_batch_item(
-                url, request, strategy_args, settings, progress, task_ids[url]
+                url,
+                request,
+                info,
+                strategy_args,
+                settings,
+                progress,
+                task_ids[url],
+                expected_sizes.get(url),
             )
             results[url] = (request, filepath, None)
 
@@ -712,7 +795,8 @@ def run_batch(
         if workers > 1 and len(jobs) > 1:
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = {
-                    pool.submit(_run, url, request): (url, request) for url, request, _ in jobs
+                    pool.submit(_run, url, request, info): (url, request)
+                    for url, request, info in jobs
                 }
                 for future in as_completed(futures):
                     url, request = futures[future]
@@ -721,9 +805,9 @@ def run_batch(
                     except Exception as exc:
                         _record_failure(url, request, exc)
         else:
-            for url, request, _ in jobs:
+            for url, request, info in jobs:
                 try:
-                    _run(url, request)
+                    _run(url, request, info)
                 except Exception as exc:
                     _record_failure(url, request, exc)
 

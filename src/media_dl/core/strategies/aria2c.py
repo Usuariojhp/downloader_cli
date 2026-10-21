@@ -28,6 +28,15 @@ class Aria2cStrategy(DownloadStrategy):
             "-k1M",
             "--min-split-size=1M",
             "--file-allocation=none",
+            # The .aria2 control file is what the progress monitor reads.
+            # Saving it every second gives smooth progress without touching
+            # the download itself.
+            "--auto-save-interval=1",
+            # Transient TLS handshake errors are retried by aria2; printing
+            # them over the Rich progress bar only confuses the user.  Real
+            # failures still surface through yt-dlp's exit code and our retry
+            # message.
+            "--quiet=true",
             "--max-connection-per-server=16",
             "--split=16",
             "--allow-overwrite=true",

@@ -25,7 +25,12 @@ from media_dl.core.exceptions import DownloadError, MediaDLError
 from media_dl.core.extractors import get_extractor
 from media_dl.core.history import HistoryRepository
 from media_dl.core.models import DownloadRequest
-from media_dl.core.progress import create_progress_hook
+from media_dl.core.progress import (
+    create_partial_monitor,
+    create_progress_hook,
+    downloaded_total_from_info,
+    estimate_download_size,
+)
 from media_dl.core.strategies import StrategyFactory, build_strategy_args
 from media_dl.ui import (
     create_media_info_table as show_media_info_table,
@@ -59,6 +64,11 @@ def _run_async(coro: Coroutine[Any, Any, T]) -> T:
     return loop.run_until_complete(coro)
 
 
+def _default_stem(title: str, media_id: str) -> str:
+    """Concrete output stem, matching yt-dlp's default naming template."""
+    return f"{title[:100].strip() or media_id} [{media_id}]"
+
+
 def _merge_postprocessors(opts: dict[str, Any], settings: Settings) -> None:
     """Add thumbnail/metadata postprocessors once, keeping any provided ones."""
     postprocessors = list(opts.get("postprocessors") or [])
@@ -74,11 +84,15 @@ def _merge_postprocessors(opts: dict[str, Any], settings: Settings) -> None:
 
 
 def _build_ydl_opts(
-    request: DownloadRequest, strategy_args: dict[str, Any], settings: Settings
+    request: DownloadRequest,
+    strategy_args: dict[str, Any],
+    settings: Settings,
+    stem: str | None = None,
 ) -> dict[str, Any]:
     """Build yt-dlp options from request and strategy."""
     base_path = Path(request.output_path or settings.download_path)
-    output_template = str(base_path / "%(title).100s [%(id)s].%(ext)s")
+    name = stem or "%(title).100s [%(id)s]"
+    output_template = str(base_path / f"{name}.%(ext)s")
 
     opts = {
         "outtmpl": output_template,
@@ -133,20 +147,45 @@ def _download_single(
     progress: Progress,
     task_id: TaskID,
     max_attempts: int,
+    expected_total: int | None = None,
 ) -> str:
     """Download single item with retry."""
     from yt_dlp import YoutubeDL
 
     last_error: Exception | None = None
     for attempt in range(1, max_attempts + 1):
+        monitor = None
         try:
             if attempt > 1:
                 time.sleep(2)
 
             ydl_opts["progress_hooks"] = [create_progress_hook(progress, task_id)]
+            # YoutubeDL normalizes outtmpl to a dict in-place; keep the
+            # original value for the .part monitor.
+            outtmpl = ydl_opts.get("outtmpl", "")
 
             with YoutubeDL(ydl_opts) as ydl:  # type: ignore[no-untyped-call]
-                result = ydl.extract_info(url, download=True)
+                # One extraction, then reuse the result to download.  This
+                # gives us the exact selected format size for the progress bar
+                # without an extra network round-trip.
+                info = ydl.extract_info(url, download=False)
+                actual_total = downloaded_total_from_info(info) or expected_total
+                if actual_total:
+                    progress.update(task_id, completed=0, total=actual_total)
+
+                # aria2c only reports progress when it exits; poll its .part file.
+                if ydl_opts.get("external_downloader"):
+                    monitor = create_partial_monitor(
+                        progress,
+                        task_id,
+                        outtmpl,
+                        actual_total,
+                    )
+                    monitor.start()
+
+                result = ydl.process_ie_result(info, download=True)
+                if monitor:
+                    monitor.complete()
                 return cast(str, ydl.prepare_filename(result))
 
         except Exception as e:
@@ -155,6 +194,9 @@ def _download_single(
                 raise DownloadError(
                     f"Falló después de {max_attempts} intentos: {e}", url=url, cause=e
                 ) from e
+        finally:
+            if monitor:
+                monitor.stop()
 
     raise DownloadError(
         f"No se intentó la descarga de {url} (intentos: {max_attempts})", url=url, cause=last_error
@@ -279,7 +321,11 @@ def playlist(
                         output_path=output,
                     )
 
-                ydl_opts = _build_ydl_opts(request, strategy_args, settings)
+                stem = _default_stem(entry.title, entry.id)
+                ydl_opts = _build_ydl_opts(request, strategy_args, settings, stem=stem)
+                expected_total = estimate_download_size(
+                    entry.formats, media_type, request.quality or ""
+                )
 
                 with Progress(
                     TextColumn("[progress.description]{task.description}"),
@@ -288,10 +334,18 @@ def playlist(
                     DownloadColumn(),
                     TransferSpeedColumn(),
                     console=console,
+                    refresh_per_second=10,
                 ) as progress:
-                    task = progress.add_task(f"[cyan]{idx}/{len(selected_entries)}", total=100)
+                    task = progress.add_task(
+                        f"[cyan]{idx}/{len(selected_entries)}", total=expected_total
+                    )
                     filepath = _download_single(
-                        video_url, ydl_opts, progress, task, settings.retry_attempts
+                        video_url,
+                        ydl_opts,
+                        progress,
+                        task,
+                        settings.retry_attempts,
+                        expected_total=expected_total,
                     )
 
                 # Save to history
