@@ -37,7 +37,7 @@ jobs:
 
       - name: Cobertura mínima
         run: |
-          pytest -q --no-header --cov=src/media_dl --cov-report=xml
+          pytest -q --no-header --cov=src/veluz --cov-report=xml
           # Fallar si la cobertura baja del 65% (actualmente 73%)
           python - <<'PY'
           import sys
@@ -82,23 +82,23 @@ jobs:
           python -m pip install -e ".[spotify,soundcloud]" pyinstaller
 
       - name: Compilar
-        run: pyinstaller --clean --noconfirm build/media_dl.spec
+        run: pyinstaller --clean --noconfirm build/veluz.spec
 
       - name: Comprobar que arranca
         run: |
-          ./dist/media-dl --version
-          ./dist/media-dl doctor
+          ./dist/veluz --version
+          ./dist/veluz doctor
 
       - name: Comprobar que el binario trae las extensiones
         # Un exclude mal puesto en el spec (websockets, mutagen) rompe el
         # binario entero y no se ve ni con los tests ni con doctor, que
         # siempre salía con 0. Con --strict esto falla si falta algo.
-        run: ./dist/media-dl doctor --strict
+        run: ./dist/veluz doctor --strict
 
       - uses: actions/upload-artifact@v4
         with:
-          name: media-dl-linux
-          path: dist/media-dl
+          name: veluz-linux
+          path: dist/veluz
           retention-days: 7
 
   e2e:
@@ -113,18 +113,18 @@ jobs:
       - name: Descargar binario
         uses: actions/download-artifact@v4
         with:
-          name: media-dl-linux
+          name: veluz-linux
           path: bin
 
       - name: Preparar
         run: |
-          chmod +x bin/media-dl
+          chmod +x bin/veluz
           mkdir -p test_e2e
 
       - name: Descarga real de Spotify
         run: |
           cd test_e2e
-          ../bin/media-dl download audio -F "https://open.spotify.com/track/70LcF31zb1H0PyJoS1Sx1r" -o . 2>&1 | tee download.log
+          ../bin/veluz download audio -F "https://open.spotify.com/track/70LcF31zb1H0PyJoS1Sx1r" -o . 2>&1 | tee download.log
           EXIT=$?
           echo "EXIT_CODE=$EXIT" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from media_dl.config import Settings
-from media_dl.core.models import Format, MediaInfo
-from media_dl.main import app
+from veluz.config import Settings
+from veluz.core.models import Format, MediaInfo
+from veluz.main import app
 
 runner = CliRunner()
 
@@ -30,14 +30,14 @@ def make_settings(tmp_path, **overrides):
 
 @pytest.fixture
 def mock_settings(tmp_path):
-    with patch("media_dl.cli.commands.download.get_settings") as mock:
+    with patch("veluz.cli.commands.download.get_settings") as mock:
         mock.return_value = make_settings(tmp_path)
         yield mock.return_value
 
 
 @pytest.fixture
 def mock_extractor():
-    with patch("media_dl.cli.commands.download.get_extractor") as mock:
+    with patch("veluz.cli.commands.download.get_extractor") as mock:
         extractor = MagicMock()
         extractor.extract = AsyncMock()
         mock.return_value = extractor
@@ -46,7 +46,7 @@ def mock_extractor():
 
 @pytest.fixture
 def mock_strategy():
-    with patch("media_dl.core.strategies.StrategyFactory.get") as mock:
+    with patch("veluz.core.strategies.StrategyFactory.get") as mock:
         strategy = MagicMock()
         strategy.name = "native"
         strategy.is_available.return_value = True
@@ -57,7 +57,7 @@ def mock_strategy():
 
 @pytest.fixture
 def mock_history_repo():
-    with patch("media_dl.cli.commands.download.HistoryRepository") as mock:
+    with patch("veluz.cli.commands.download.HistoryRepository") as mock:
         repo = MagicMock()
         repo.is_duplicate.return_value = None
         mock.return_value = repo
@@ -101,13 +101,13 @@ class TestDownloadVideo:
     ):
         mock_extractor.extract.return_value = sample_media_info
 
-        with patch("media_dl.cli.commands.download._run_async") as mock_run:
+        with patch("veluz.cli.commands.download._run_async") as mock_run:
             mock_run.return_value = sample_media_info
 
             destino = tmp_path / "test_video.mp4"
             destino.write_bytes(b"x" * 50_000_000)
 
-            with patch("media_dl.cli.commands.download._download_with_retry") as mock_download:
+            with patch("veluz.cli.commands.download._download_with_retry") as mock_download:
                 mock_download.return_value = str(destino)
 
                 result = runner.invoke(
@@ -135,7 +135,7 @@ class TestDownloadAudio:
     ):
         mock_extractor.extract.return_value = sample_media_info
 
-        with patch("media_dl.cli.commands.download._run_async") as mock_run:
+        with patch("veluz.cli.commands.download._run_async") as mock_run:
             mock_run.return_value = sample_media_info
 
             m4a = tmp_path / "test_audio.m4a"
@@ -143,7 +143,7 @@ class TestDownloadAudio:
             mp3 = tmp_path / "test_audio.mp3"
             mp3.write_bytes(b"y" * 5_000_000)
 
-            with patch("media_dl.cli.commands.download._download_with_retry") as mock_download:
+            with patch("veluz.cli.commands.download._download_with_retry") as mock_download:
                 mock_download.return_value = str(m4a)
 
                 result = runner.invoke(
@@ -155,7 +155,7 @@ class TestDownloadAudio:
 
 @pytest.fixture
 def mock_history_repo_cmd():
-    with patch("media_dl.cli.commands.history.HistoryRepository") as mock:
+    with patch("veluz.cli.commands.history.HistoryRepository") as mock:
         repo = MagicMock()
         repo.list.return_value = []
         repo.count.return_value = 0
@@ -165,7 +165,7 @@ def mock_history_repo_cmd():
 
 @pytest.fixture
 def mock_settings_cmd(tmp_path):
-    with patch("media_dl.cli.commands.config.get_settings") as mock:
+    with patch("veluz.cli.commands.config.get_settings") as mock:
         mock.return_value = make_settings(tmp_path)
         yield mock.return_value
 
@@ -376,12 +376,12 @@ class TestMain:
     def test_version(self):
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "media-dl" in result.stdout
+        assert "veluz" in result.stdout
 
     def test_help(self):
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "media-dl" in result.stdout
+        assert "veluz" in result.stdout
         assert "download" in result.stdout
         assert "playlist" in result.stdout
         assert "history" in result.stdout
@@ -398,7 +398,7 @@ class TestMain:
 
 class TestPrompts:
     def test_parse_range(self):
-        from media_dl.ui.prompts import parse_range
+        from veluz.ui.prompts import parse_range
 
         # Simple range
         assert parse_range("1-5", 10) == [0, 1, 2, 3, 4]
@@ -429,7 +429,7 @@ class TestPrompts:
             parse_range("1-x", 10)
 
     def test_format_size(self):
-        from media_dl.ui.tables import format_size
+        from veluz.ui.tables import format_size
 
         assert format_size(0) == "Desconocido"
         assert format_size(500) == "500.00 B"
@@ -438,7 +438,7 @@ class TestPrompts:
         assert format_size(1024 * 1024 * 1024) == "1.00 GB"
 
     def test_format_duration(self):
-        from media_dl.ui.tables import format_duration
+        from veluz.ui.tables import format_duration
 
         assert format_duration(None) == "N/A"
         assert format_duration(30) == "0m 30s"

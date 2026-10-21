@@ -6,8 +6,8 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from media_dl.config import Settings
-from media_dl.core.models import MediaInfo, PlaylistEntry
+from veluz.config import Settings
+from veluz.core.models import MediaInfo, PlaylistEntry
 
 
 @pytest.fixture
@@ -54,19 +54,15 @@ def _patches(info, *, is_duplicate=None, download_result="/tmp/out.mp4"):
     strategy.build_args.return_value = {}
 
     return {
-        "get_settings": patch("media_dl.cli.commands.playlist.get_settings"),
-        "get_extractor": patch(
-            "media_dl.cli.commands.playlist.get_extractor", return_value=extractor
-        ),
-        "repo": patch("media_dl.cli.commands.playlist.HistoryRepository", return_value=repo),
-        "factory": patch(
-            "media_dl.cli.commands.playlist.StrategyFactory.get", return_value=strategy
-        ),
-        "run_async": patch("media_dl.cli.commands.playlist._run_async", return_value=info),
+        "get_settings": patch("veluz.cli.commands.playlist.get_settings"),
+        "get_extractor": patch("veluz.cli.commands.playlist.get_extractor", return_value=extractor),
+        "repo": patch("veluz.cli.commands.playlist.HistoryRepository", return_value=repo),
+        "factory": patch("veluz.cli.commands.playlist.StrategyFactory.get", return_value=strategy),
+        "run_async": patch("veluz.cli.commands.playlist._run_async", return_value=info),
         "download": patch(
-            "media_dl.cli.commands.playlist._download_single", return_value=download_result
+            "veluz.cli.commands.playlist._download_single", return_value=download_result
         ),
-        "confirm": patch("media_dl.cli.commands.playlist.prompt_yes_no", return_value=True),
+        "confirm": patch("veluz.cli.commands.playlist.prompt_yes_no", return_value=True),
     }
 
 
@@ -79,7 +75,7 @@ def run_playlist(args, info, settings, **kwargs):
         # patcher.start() devuelve el mock de la clase; el repo es su instancia
         started["repo"] = started["repo"].return_value
         started["get_settings"].return_value = settings
-        from media_dl.main import app
+        from veluz.main import app
 
         return CliRunner().invoke(app, args), started
     finally:
@@ -89,28 +85,28 @@ def run_playlist(args, info, settings, **kwargs):
 
 class TestValidation:
     def test_rejects_unknown_type(self, settings):
-        from media_dl.cli.commands.playlist import playlist
+        from veluz.cli.commands.playlist import playlist
 
         with (
-            patch("media_dl.cli.commands.playlist.get_settings", return_value=settings),
+            patch("veluz.cli.commands.playlist.get_settings", return_value=settings),
             pytest.raises(typer.Exit),
         ):
             playlist(ctx=None, url="u", media_type="pelicula")
 
     def test_rejects_unknown_format(self, settings):
-        from media_dl.cli.commands.playlist import playlist
+        from veluz.cli.commands.playlist import playlist
 
         with (
-            patch("media_dl.cli.commands.playlist.get_settings", return_value=settings),
+            patch("veluz.cli.commands.playlist.get_settings", return_value=settings),
             pytest.raises(typer.Exit),
         ):
             playlist(ctx=None, url="u", audio_format="ogg")
 
     def test_rejects_bad_bitrate(self, settings):
-        from media_dl.cli.commands.playlist import playlist
+        from veluz.cli.commands.playlist import playlist
 
         with (
-            patch("media_dl.cli.commands.playlist.get_settings", return_value=settings),
+            patch("veluz.cli.commands.playlist.get_settings", return_value=settings),
             pytest.raises(typer.Exit),
         ):
             playlist(ctx=None, url="u", media_type="audio", bitrate=999)
@@ -134,13 +130,13 @@ class TestSelection:
         assert mocks["download"].call_count == 5
 
     def test_invalid_range_aborts(self, playlist_info, settings):
-        from media_dl.cli.commands.playlist import playlist
+        from veluz.cli.commands.playlist import playlist
 
         with (
-            patch("media_dl.cli.commands.playlist.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.playlist.get_extractor"),
-            patch("media_dl.cli.commands.playlist._run_async", return_value=playlist_info),
-            patch("media_dl.cli.commands.playlist.prompt_yes_no", return_value=True),
+            patch("veluz.cli.commands.playlist.get_settings", return_value=settings),
+            patch("veluz.cli.commands.playlist.get_extractor"),
+            patch("veluz.cli.commands.playlist._run_async", return_value=playlist_info),
+            patch("veluz.cli.commands.playlist.prompt_yes_no", return_value=True),
             pytest.raises(typer.Exit),
         ):
             playlist(ctx=None, url=playlist_info.url, range="9-3")
@@ -152,7 +148,7 @@ class TestSelection:
         try:
             started["get_settings"].return_value = settings
             started["confirm"].return_value = False
-            from media_dl.main import app
+            from veluz.main import app
 
             CliRunner().invoke(app, ["playlist", playlist_info.url])
             assert started["download"].call_count == 0
@@ -214,12 +210,12 @@ class TestNotAPlaylist:
             platform="YouTube",
             is_playlist=False,
         )
-        from media_dl.cli.commands.playlist import playlist
+        from veluz.cli.commands.playlist import playlist
 
         with (
-            patch("media_dl.cli.commands.playlist.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.playlist.get_extractor"),
-            patch("media_dl.cli.commands.playlist._run_async", return_value=video),
+            patch("veluz.cli.commands.playlist.get_settings", return_value=settings),
+            patch("veluz.cli.commands.playlist.get_extractor"),
+            patch("veluz.cli.commands.playlist._run_async", return_value=video),
             pytest.raises(typer.Exit),
         ):
             playlist(ctx=None, url=video.url)

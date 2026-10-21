@@ -1,8 +1,8 @@
-# 🚀 media-dl - Unified Media Downloader
+# 🚀 veluz - Unified Media Downloader
 
-**Cyan Edition v2.0.0** - Descargador multimedia unificado con interfaz moderna en tonos cian.
+**Cyan Edition v3.0.0** - Descargador multimedia unificado con interfaz moderna en tonos cian.
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/Usuariojhp/downloader_cli)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue)](https://github.com/Usuariojhp/downloader_cli)
 [![CI](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11+-green)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
@@ -35,12 +35,14 @@ extremo contra la plataforma real, no solo si el extractor existe.
 Instagram y Twitter/X **no** funcionan de forma anónima: yt-dlp necesita
 credenciales de sesión para ese contenido, y además cambia la API con
 frecuencia. Si ves un error tipo `No video formats found` o `No video could
-be found`, no es un fallo de media-dl sino que la publicación no es pública
+be found`, no es un fallo de veluz sino que la publicación no es pública
 o la plataforma pide login. Para YouTube, TikTok, Facebook y el resto vía
 yt-dlp no hace falta ninguna cuenta.
 
 ### ⚡ Rendimiento
 - **Modo Ultra** - aria2c con 16 conexiones paralelas (hasta 10x más rápido)
+- **Progreso real con aria2c** - Lee el bitfield del archivo `.aria2` para mostrar
+  porcentaje y velocidad exactos, sin sacrificar la velocidad de descarga
 - **Modo Normal** - yt-dlp nativo (sin dependencias externas)
 - **Reintentos inteligentes** - Hasta 3 intentos con backoff
 - **Descargas concurrentes** - Hasta 8 en lote con `--concurrent`
@@ -63,22 +65,47 @@ yt-dlp no hace falta ninguna cuenta.
 
 ## 📦 Instalación
 
-> ⚠️ **Este proyecto NO está en PyPI.** Existe un paquete llamado `media-dl`
-> en PyPI que **no es este proyecto** (lo publica un tercero, versión 0.1).
-> `pip install media-dl` te instalaría su código, no el nuestro. Instala
-> siempre desde el repositorio, como se explica abajo.
+> ⚠️ **Este proyecto se distribuye desde el repositorio y el ZIP**, no desde
+> PyPI. Si alguien publica un paquete con el mismo nombre, no es este código.
 
 **Requisitos:** Python **3.11 o superior**. Con 3.10 o inferior la instalación falla.
 
-### Opción 1: Desde el repositorio (la única vía soportada)
+> 🔁 **¿Vienes de `media-dl`?** Al ejecutar `veluz` por primera vez se copia
+> automáticamente `~/.config/media-dl` a `~/.config/veluz` (configuración,
+> historial y credenciales). El comando `media-dl` sigue existiendo como alias
+> y las variables `MEDIA_DL_*` se siguen leyendo si no defines `VELUZ_*`.
 
-El repositorio es privado, así que hace falta tu clave SSH de GitHub.
+### Opción 1: ZIP (la más rápida, ideal para Termux)
 
 ```bash
-git clone git@github.com:Usuariojhp/downloader_cli.git
+# Descomprime el ZIP y entra en la carpeta
+unzip veluz.zip -d ~/veluz
+cd ~/veluz
+python -m pip install --no-build-isolation -e .
+veluz doctor
+```
+
+### Opción 2: Desde el repositorio
+
+El repositorio es público:
+
+```bash
+git clone https://github.com/Usuariojhp/downloader_cli.git
 cd downloader_cli
 python3 -m venv .venv && source .venv/bin/activate   # opcional pero recomendado
 pip install -e .
+```
+
+En **Termux** (Android) usa `python -m pip` y evita el venv si ya tienes el
+entorno del sistema:
+
+```bash
+pkg update && pkg upgrade
+pkg install python git aria2 ffmpeg
+git clone https://github.com/Usuariojhp/downloader_cli.git
+cd downloader_cli
+python -m pip install --no-build-isolation -e .
+veluz doctor
 ```
 
 Para trabajar en el proyecto (tests, linter, tipos):
@@ -87,17 +114,17 @@ Para trabajar en el proyecto (tests, linter, tipos):
 pip install -e ".[dev]"
 ```
 
-### Opción 2: Ejecutable portable (sin instalar Python)
+### Opción 3: Ejecutable portable (sin instalar Python)
 
 Cada push a `master` compila un binario autónomo para Linux. Se descarga desde
 la pestaña **Actions** del repo → última ejecución → **Artifacts** →
-`media-dl-linux` (requiere iniciar sesión en GitHub). Son ~183 MB porque
+`veluz-linux` (requiere iniciar sesión en GitHub). Son ~183 MB porque
 lleva Python y todas las dependencias dentro.
 
 ```bash
-chmod +x media-dl
-./media-dl doctor     # comprueba que funciona
-./media-dl doctor --strict   # sale con error si le falta alguna extensión
+chmod +x veluz
+./veluz doctor     # comprueba que funciona
+./veluz doctor --strict   # sale con error si le falta alguna extensión
 ```
 
 El binario que publica la CI **incluye** el extra de Spotify, así que las
@@ -125,6 +152,9 @@ Ninguna es obligatoria: sin ellas el programa funciona igual, pero sin
 descargas "ultra" (aria2c) y sin conversión a MP3 (ffmpeg).
 
 ```bash
+# Termux (Android)
+pkg install aria2 ffmpeg
+
 # Fedora
 sudo dnf install aria2 ffmpeg
 
@@ -147,7 +177,7 @@ scoop install aria2 ffmpeg
 Comprueba lo que tienes con:
 
 ```bash
-media-dl doctor
+veluz doctor
 ```
 
 ---
@@ -161,52 +191,52 @@ script, una tubería, CI— no pregunta y aplica tu configuración.
 
 ```bash
 # Descargar video (pregunta la calidad)
-media-dl download video "https://youtube.com/watch?v=..."
+veluz download video "https://youtube.com/watch?v=..."
 
 # Decidir tú la calidad y que no pregunte
-media-dl download video "https://..." -q 1080
+veluz download video "https://..." -q 1080
 
 # Descargar audio (pregunta formato y bitrate)
-media-dl download audio "https://youtube.com/watch?v=..."
+veluz download audio "https://youtube.com/watch?v=..."
 
 # Descargar playlist completa (automática, no pregunta por cada vídeo)
-media-dl playlist "https://youtube.com/playlist?list=..."
+veluz playlist "https://youtube.com/playlist?list=..."
 
 # Ver historial
-media-dl history
+veluz history
 
 # Verificar sistema
-media-dl doctor
+veluz doctor
 ```
 
 ### Opciones avanzadas
 ```bash
 # Video calidad específica + subtítulos
-media-dl download video "URL" --quality 1080 --subs es,en
+veluz download video "URL" --quality 1080 --subs es,en
 
 # Audio formato original (sin convertir)
-media-dl download audio "URL" --format original
+veluz download audio "URL" --format original
 
 # Descarga por lotes desde archivo (hasta 8 en paralelo)
-media-dl download batch -f urls.txt --type video --concurrent 4
+veluz download batch -f urls.txt --type video --concurrent 4
 
 # Playlist solo videos 1-5 y 10 (o todas con --range all)
-media-dl playlist "URL" --range 1-5,10
+veluz playlist "URL" --range 1-5,10
 
 # Configurar carpeta de descargas
-media-dl config set download_path ~/Downloads
+veluz config set download_path ~/Downloads
 ```
 
 ### Modo interactivo
 ```bash
-media-dl interactive
+veluz interactive
 ```
 
 ---
 
 ## ⚙️ Configuración
 
-### Archivo de configuración (`~/.config/media-dl/config.json`)
+### Archivo de configuración (`~/.config/veluz/config.json`)
 ```json
 {
   "download_path": "./downloads",
@@ -233,33 +263,33 @@ media-dl interactive
 | `default_audio_format` | `choice` | `mp3` \| `original` | `mp3` | Formato de audio por defecto |
 | `default_audio_bitrate` | `int` | 128–320 | 192 | Bitrate MP3 en kbps |
 | `auto_subtitle` | `bool` | `true` \| `false` | `false` | Descargar subtítulos automáticos |
-| `subtitle_languages` | `list` | códigos ISO separados por coma (ej: `es,en`) | `""` | Idiomas de subtítulos preferidos |
+| `subtitle_languages` | `list` | códigos ISO separados por coma (ej: `es,en`) | `es,en` | Idiomas de subtítulos preferidos |
 | `retry_attempts` | `int` | 1–10 | 3 | Reintentos tras fallo de red |
 | `check_duplicates` | `bool` | `true` \| `false` | `true` | Evita bajar archivos ya en historial |
 | `aria2c_connections` | `int` | 4–32 | 16 | Conexiones simultáneas por archivo (modo ultra) |
-| `aria2c_split` | `int` | 1–32 | 1 | Número de segmentos por conexión |
+| `aria2c_split` | `int` | 1–32 | 16 | Número de segmentos por conexión |
 | `max_download_speed` | `int` | 0–1000000 KB/s (0 = sin límite) | 0 | Límite global de velocidad de descarga |
 | `concurrent_downloads` | `int` | 1–8 | 3 | Archivos en paralelo (batch / playlist) |
 | `embed_thumbnail` | `bool` | `true` \| `false` | `true` | Incrustar carátula en el archivo de audio |
 | `embed_metadata` | `bool` | `true` \| `false` | `true` | Escribir metadatos ID3 (título, artista, álbum...) |
 | `write_info_json` | `bool` | `true` \| `false` | `false` | Guardar `.info.json` de yt-dlp junto al archivo |
 
-> **Notas:** `embed_thumbnail` solo funciona si la fuente provee la imagen (YouTube Music/Spotify: media-dl la descarga aparte y la inyecta). Si no hay carátula, el archivo se guarda sin ella — la descarga no falla.
+> **Notas:** `embed_thumbnail` solo funciona si la fuente provee la imagen (YouTube Music/Spotify: veluz la descarga aparte y la inyecta). Si no hay carátula, el archivo se guarda sin ella — la descarga no falla.
 
 ### Variables de entorno
-Tienen prioridad sobre `config.json` (prefijo `MEDIA_DL_` + nombre de la clave en mayúsculas).
+Tienen prioridad sobre `config.json` (prefijo `VELUZ_` + nombre de la clave en mayúsculas).
 
 ```bash
-export MEDIA_DL_DOWNLOAD_PATH=~/Downloads
-export MEDIA_DL_DOWNLOAD_MODE=ultra
-export MEDIA_DL_ARIA2C_CONNECTIONS=32
-export MEDIA_DL_MAX_DOWNLOAD_SPEED=5000  # KB/s
-export MEDIA_DL_CONFIG_DIR=~/.config/media-dl  # dónde vive config.json
+export VELUZ_DOWNLOAD_PATH=~/Downloads
+export VELUZ_DOWNLOAD_MODE=ultra
+export VELUZ_ARIA2C_CONNECTIONS=32
+export VELUZ_MAX_DOWNLOAD_SPEED=5000  # KB/s
+export VELUZ_CONFIG_DIR=~/.config/veluz  # dónde vive config.json
 ```
 
 ### 🔑 Credenciales de Spotify (opcional)
 
-**¿Por qué?** Sin credenciales, media-dl usa la API pública anónima de Spotify:
+**¿Por qué?** Sin credenciales, veluz usa la API pública anónima de Spotify:
 - Límites de tasa muy estrictos (IP compartida)
 - A veces falla al obtener metadatos / carátulas
 
@@ -274,23 +304,23 @@ export MEDIA_DL_CONFIG_DIR=~/.config/media-dl  # dónde vive config.json
 
 ```bash
 # Opción A: Variables de entorno (recomendado, no toca archivos)
-export MEDIA_DL_SPOTIFY_CLIENT_ID=tu_client_id
-export MEDIA_DL_SPOTIFY_CLIENT_SECRET=tu_client_secret
+export VELUZ_SPOTIFY_CLIENT_ID=tu_client_id
+export VELUZ_SPOTIFY_CLIENT_SECRET=tu_client_secret
 # Añádelas a tu ~/.bashrc o ~/.zshrc para que persistan
 ```
 
 ```bash
 # Opción B: Archivo de configuración local
-media-dl config set spotify_client_id TU_CLIENT_ID
-media-dl config set spotify_client_secret TU_CLIENT_SECRET
-# Se guarda en ~/.config/media-dl/config.json — **nunca lo subas a git ni lo compartas**
+veluz config set spotify_client_id TU_CLIENT_ID
+veluz config set spotify_client_secret TU_CLIENT_SECRET
+# Se guarda en ~/.config/veluz/config.json — **nunca lo subas a git ni lo compartas**
 ```
 
-> **Nota:** El binario portable (`dist/media-dl`) también lee `~/.config/media-dl/config.json`. Las credenciales **no** van embebidas en el ejecutable.
+> **Nota:** El binario portable (`dist/veluz`) también lee `~/.config/veluz/config.json`. Las credenciales **no** van embebidas en el ejecutable.
 
 ### Modo interactivo — Configuración
 ```
-media-dl interactive
+veluz interactive
   → 5 ⚙️ Configuración
       → 1 Ver configuración
       → 2 Cambiar valor  (te pide la clave y su nuevo valor)
@@ -304,9 +334,9 @@ En **Cambiar valor** se listan las claves válidas y se valida tu entrada.
 
 ## 🔧 Comandos Completos
 
-### `media-dl download video`
+### `veluz download video`
 ```bash
-media-dl download video URL [OPTIONS]
+veluz download video URL [OPTIONS]
 
 Options:
   -q, --quality TEXT    Calidad (pregunta si se omite)
@@ -316,9 +346,9 @@ Options:
   -F, --force           Forzar descarga aunque exista
 ```
 
-### `media-dl download audio`
+### `veluz download audio`
 ```bash
-media-dl download audio URL [OPTIONS]
+veluz download audio URL [OPTIONS]
 
 Options:
   -f, --format [mp3|original]  Formato (pregunta si se omite)
@@ -328,9 +358,9 @@ Options:
   -F, --force                  Forzar descarga
 ```
 
-### `media-dl download batch`
+### `veluz download batch`
 ```bash
-media-dl download batch [OPTIONS]
+veluz download batch [OPTIONS]
 
 Options:
   -f, --file PATH        Archivo con URLs (una por línea)
@@ -343,9 +373,9 @@ El lote **no pregunta nada**: baja cada URL a la mejor calidad, porque
 preguntar por cada una sería insoportable. Usa la calidad de tu configuración
 (`dl config set default_video_quality ...`).
 
-### `media-dl playlist`
+### `veluz playlist`
 ```bash
-media-dl playlist URL [OPTIONS]
+veluz playlist URL [OPTIONS]
 
 Options:
   -r, --range TEXT       Rango (ej: 1-5,10,15-20) o 'all'
@@ -356,10 +386,10 @@ Options:
   -o, --output PATH      Directorio de salida
 ```
 
-### `media-dl history`
+### `veluz history`
 ```bash
-media-dl history [OPTIONS]
-media-dl history clear [--platform P] [--type T] [--force]
+veluz history [OPTIONS]
+veluz history clear [--platform P] [--type T] [--force]
 
 Options:
   -l, --limit INT        Límite entradas (default: 20)
@@ -368,18 +398,18 @@ Options:
   -s, --stats            Mostrar estadísticas
 ```
 
-### `media-dl config`
+### `veluz config`
 ```bash
-media-dl config show          # Ver configuración
-media-dl config set KEY [VAL] # Establecer valor
-media-dl config reset         # Restablecer defaults
-media-dl config path          # Ver rutas
+veluz config show          # Ver configuración
+veluz config set KEY [VAL] # Establecer valor
+veluz config reset         # Restablecer defaults
+veluz config path          # Ver rutas
 ```
 
-### `media-dl doctor`
+### `veluz doctor`
 ```bash
-media-dl doctor [--verbose]      # Diagnóstico del sistema
-media-dl doctor update           # Actualizar yt-dlp y dependencias
+veluz doctor [--verbose]      # Diagnóstico del sistema
+veluz doctor update           # Actualizar yt-dlp y dependencias
 ```
 
 ---
@@ -387,8 +417,8 @@ media-dl doctor update           # Actualizar yt-dlp y dependencias
 ## 🏗️ Arquitectura
 
 ```
-media-dl/
-├── src/media_dl/
+veluz/
+├── src/veluz/
 │   ├── main.py              # Entry point Typer
 │   ├── config/              # Pydantic Settings
 │   ├── core/
@@ -418,20 +448,20 @@ media-dl/
 pytest
 
 # Con coverage
-pytest --cov=src/media_dl --cov-report=term-missing
+pytest --cov=src/veluz --cov-report=term-missing
 
 # Solo tests unitarios
 pytest tests/test_models.py tests/test_strategies.py
 ```
 
-La suite aísla `MEDIA_DL_CONFIG_DIR` en un directorio temporal, así que nunca
-toca tu `~/.config/media-dl` real.
+La suite aísla `VELUZ_CONFIG_DIR` en un directorio temporal, así que nunca
+toca tu `~/.config/veluz` real.
 
 ### Estado de la verificación
 
 | Comprobación | Estado |
 |---|---|
-| `pytest` | 244 tests, todos en verde |
+| `pytest` | 297 tests, todos en verde |
 | `ruff check .` | 0 errores |
 | `ruff format --check .` | 0 diferencias |
 | `mypy src/` (strict) | 0 errores |
@@ -455,17 +485,17 @@ a `.github/workflows/ci.yml`.
 build\build.bat
 
 # O manual (usa el spec del repo)
-pyinstaller --clean --noconfirm build/media_dl.spec
+pyinstaller --clean --noconfirm build/veluz.spec
 ```
 
-### PyPI Package
+### Paquete Python (opcional)
 ```bash
-# Build
+# Construir el wheel/sdist localmente
 pip install build
 python -m build
 
-# Publicar
-twine upload dist/*
+# Si algún día se publica:
+# twine upload dist/*
 ```
 
 ---
@@ -476,7 +506,7 @@ twine upload dist/*
 2. Rama: `git checkout -b feature/nueva-funcionalidad`
 3. Antes de abrir el PR, las cuatro puertas tienen que pasar en verde:
    ```bash
-   pytest                      # 212 tests
+   pytest                      # 293 tests
    ruff check .                # lint
    ruff format --check .       # formato
    mypy src/                   # tipos (modo strict)
@@ -491,12 +521,12 @@ pasa en GitHub.
 
 | Carpeta | Contenido |
 |---------|-----------|
-| `src/media_dl/core/extractors/` | Un extractor por plataforma, con prioridad |
-| `src/media_dl/core/strategies/` | aria2c y yt-dlp como estrategias intercambiables |
-| `src/media_dl/core/history/` | Historial en SQLite |
-| `src/media_dl/cli/commands/` | Los comandos de la terminal |
-| `src/media_dl/ui/` | Colores, tablas, menús y barras de progreso |
-| `tests/` | 212 tests, uno por comportamiento |
+| `src/veluz/core/extractors/` | Un extractor por plataforma, con prioridad |
+| `src/veluz/core/strategies/` | aria2c y yt-dlp como estrategias intercambiables |
+| `src/veluz/core/history/` | Historial en SQLite |
+| `src/veluz/cli/commands/` | Los comandos de la terminal |
+| `src/veluz/ui/` | Colores, tablas, menús y barras de progreso |
+| `tests/` | 297 tests, uno por comportamiento |
 
 Añadir una plataforma nueva es un fichero en `core/extractors/` que herede de
 `Extractor` y se registre con `@register_extractor`. El registro se encarga
@@ -529,7 +559,7 @@ MIT License - ver [LICENSE](LICENSE) para detalles.
 - **Estado de las pruebas**: [CI en GitHub Actions](https://github.com/Usuariojhp/downloader_cli/actions/workflows/ci.yml)
 
 Es un proyecto personal y el soporte es limitado: si algo falla, abre una issue
-con la salida de `media-dl doctor` y el comando exacto que ejecutaste.
+con la salida de `veluz doctor` y el comando exacto que ejecutaste.
 
 ---
 
@@ -541,4 +571,4 @@ con la salida de `media-dl doctor` y el comando exacto que ejecutaste.
 
 **Desarrollado con ❤️ para la comunidad**
 
-*media-dl v2.0.0 - Cyan Edition*
+*veluz v3.0.0 - Cyan Edition*

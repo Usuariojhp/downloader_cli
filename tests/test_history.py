@@ -2,7 +2,7 @@
 
 import hashlib
 
-from media_dl.core.history import HistoryRepository
+from veluz.core.history import HistoryRepository
 
 
 class TestHistoryRepository:

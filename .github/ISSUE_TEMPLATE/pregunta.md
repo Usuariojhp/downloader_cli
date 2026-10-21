@@ -18,4 +18,4 @@ assignees: ""
 
 ## Duda concreta
 
-<!-- Con la salida de `media-dl history` o `media-dl config show` si ayuda. -->
+<!-- Con la salida de `veluz history` o `veluz config show` si ayuda. -->

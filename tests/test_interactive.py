@@ -5,8 +5,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from media_dl.config import Settings
-from media_dl.main import app, interactive
+from veluz.config import Settings
+from veluz.main import app, interactive
 
 
 @pytest.fixture
@@ -22,13 +22,13 @@ def settings(tmp_path):
 def _menu(*choices):
     """Patch show_main_menu so each loop iteration returns the next choice."""
     iterator = iter(choices)
-    return patch("media_dl.ui.show_main_menu", side_effect=lambda: next(iterator))
+    return patch("veluz.ui.show_main_menu", side_effect=lambda: next(iterator))
 
 
 class TestMenuRouting:
     def test_option_0_exits(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("0"),
         ):
             result = CliRunner().invoke(app, ["interactive"])
@@ -37,11 +37,11 @@ class TestMenuRouting:
 
     def test_option_1_downloads_video(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("1", "0"),
             patch("typer.prompt", return_value="https://youtube.com/watch?v=abc"),
-            patch("media_dl.cli.commands.download.run_video") as run_video,
-            patch("media_dl.ui.pause"),
+            patch("veluz.cli.commands.download.run_video") as run_video,
+            patch("veluz.ui.pause"),
         ):
             result = CliRunner().invoke(app, ["interactive"])
 
@@ -54,11 +54,11 @@ class TestMenuRouting:
     def test_option_2_asks_audio_settings(self, settings):
         """Sin audio_format/bitrate explícitos, run_audio debe preguntar."""
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("2", "0"),
             patch("typer.prompt", return_value="https://youtube.com/watch?v=abc"),
-            patch("media_dl.cli.commands.download.run_audio") as run_audio,
-            patch("media_dl.ui.pause"),
+            patch("veluz.cli.commands.download.run_audio") as run_audio,
+            patch("veluz.ui.pause"),
         ):
             CliRunner().invoke(app, ["interactive"])
 
@@ -70,11 +70,11 @@ class TestMenuRouting:
 
     def test_option_1_asks_quality(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("1", "0"),
             patch("typer.prompt", return_value="https://youtube.com/watch?v=abc"),
-            patch("media_dl.cli.commands.download.run_video") as run_video,
-            patch("media_dl.ui.pause"),
+            patch("veluz.cli.commands.download.run_video") as run_video,
+            patch("veluz.ui.pause"),
         ):
             CliRunner().invoke(app, ["interactive"])
 
@@ -82,10 +82,10 @@ class TestMenuRouting:
 
     def test_option_3_runs_batch(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("3", "0"),
-            patch("media_dl.cli.commands.download.run_batch") as run_batch,
-            patch("media_dl.ui.pause"),
+            patch("veluz.cli.commands.download.run_batch") as run_batch,
+            patch("veluz.ui.pause"),
         ):
             CliRunner().invoke(app, ["interactive"])
 
@@ -93,10 +93,10 @@ class TestMenuRouting:
 
     def test_option_4_shows_history(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("4", "0"),
-            patch("media_dl.cli.commands.history.show_history") as show_history,
-            patch("media_dl.ui.pause"),
+            patch("veluz.cli.commands.history.show_history") as show_history,
+            patch("veluz.ui.pause"),
         ):
             CliRunner().invoke(app, ["interactive"])
 
@@ -104,9 +104,9 @@ class TestMenuRouting:
 
     def test_option_6_runs_doctor(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("6", "0"),
-            patch("media_dl.cli.commands.doctor.run_doctor") as run_doctor,
+            patch("veluz.cli.commands.doctor.run_doctor") as run_doctor,
         ):
             CliRunner().invoke(app, ["interactive"])
 
@@ -114,11 +114,11 @@ class TestMenuRouting:
 
     def test_empty_url_does_nothing(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("1", "0"),
             patch("typer.prompt", return_value="   "),
-            patch("media_dl.cli.commands.download.run_video") as run_video,
-            patch("media_dl.ui.pause"),
+            patch("veluz.cli.commands.download.run_video") as run_video,
+            patch("veluz.ui.pause"),
         ):
             CliRunner().invoke(app, ["interactive"])
 
@@ -130,13 +130,13 @@ class TestConfigSubmenu:
         """Enter the config submenu, pick ``opts`` and return the patched mocks."""
         mocks = {}
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("5", "0"),
             patch("typer.prompt", side_effect=list(opts)),
-            patch("media_dl.cli.commands.config.show_config") as show_config,
-            patch("media_dl.cli.commands.config.set_config") as set_config,
-            patch("media_dl.cli.commands.config.reset_config") as reset_config,
-            patch("media_dl.cli.commands.config.show_paths") as show_paths,
+            patch("veluz.cli.commands.config.show_config") as show_config,
+            patch("veluz.cli.commands.config.set_config") as set_config,
+            patch("veluz.cli.commands.config.reset_config") as reset_config,
+            patch("veluz.cli.commands.config.show_paths") as show_paths,
         ):
             mocks = {
                 "show": show_config,
@@ -165,10 +165,10 @@ class TestConfigSubmenu:
 class TestResilience:
     def test_error_does_not_kill_the_loop(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("4", "0"),
-            patch("media_dl.cli.commands.history.show_history", side_effect=RuntimeError("boom")),
-            patch("media_dl.ui.pause"),
+            patch("veluz.cli.commands.history.show_history", side_effect=RuntimeError("boom")),
+            patch("veluz.ui.pause"),
         ):
             result = CliRunner().invoke(app, ["interactive"])
 
@@ -179,10 +179,10 @@ class TestResilience:
         import typer
 
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("4", "4", "0"),
-            patch("media_dl.cli.commands.history.show_history", side_effect=typer.Exit(1)),
-            patch("media_dl.ui.pause"),
+            patch("veluz.cli.commands.history.show_history", side_effect=typer.Exit(1)),
+            patch("veluz.ui.pause"),
         ):
             result = CliRunner().invoke(app, ["interactive"])
 
@@ -190,9 +190,9 @@ class TestResilience:
 
     def test_keyboard_interrupt_can_exit(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
-            patch("media_dl.ui.show_main_menu", side_effect=KeyboardInterrupt),
-            patch("media_dl.ui.prompt_yes_no", return_value=True),
+            patch("veluz.main.get_settings", return_value=settings),
+            patch("veluz.ui.show_main_menu", side_effect=KeyboardInterrupt),
+            patch("veluz.ui.prompt_yes_no", return_value=True),
         ):
             result = CliRunner().invoke(app, ["interactive"])
 
@@ -201,10 +201,10 @@ class TestResilience:
 
     def test_keyboard_interrupt_can_continue(self, settings):
         with (
-            patch("media_dl.main.get_settings", return_value=settings),
+            patch("veluz.main.get_settings", return_value=settings),
             _menu("0"),
-            patch("media_dl.ui.show_main_menu", side_effect=[KeyboardInterrupt, "0"]),
-            patch("media_dl.ui.prompt_yes_no", return_value=False),
+            patch("veluz.ui.show_main_menu", side_effect=[KeyboardInterrupt, "0"]),
+            patch("veluz.ui.prompt_yes_no", return_value=False),
         ):
             result = CliRunner().invoke(app, ["interactive"])
 
@@ -217,7 +217,7 @@ def test_interactive_is_registered():
 
 
 def test_interactive_needs_no_arguments():
-    """No debe exigir parámetros: se usa como `media-dl interactive`."""
+    """No debe exigir parámetros: se usa como `veluz interactive`."""
     import inspect
 
     signature = inspect.signature(interactive)
@@ -236,7 +236,7 @@ def test_console_is_bound():
     """
     from rich.console import Console
 
-    import media_dl.main as main_module
+    import veluz.main as main_module
 
     assert isinstance(main_module.console, Console)
     assert callable(main_module.cli_main)

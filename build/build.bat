@@ -1,5 +1,5 @@
 @echo off
-REM Build script for media-dl portable executable (Windows)
+REM Build script for veluz portable executable (Windows)
 
 setlocal enabledelayedexpansion
 
@@ -11,7 +11,7 @@ set CYAN=
 set NC=
 
 echo ==========================================
-echo   media-dl - Build Portable Executable
+echo   veluz - Build Portable Executable
 echo ==========================================
 echo.
 
@@ -47,23 +47,23 @@ echo.
 echo [INFO] Compilando ejecutable portable...
 echo.
 
-pyinstaller --clean --noconfirm build\media_dl.spec
+pyinstaller --clean --noconfirm build\veluz.spec
 
 REM Verify build
-if exist "dist\media-dl.exe" (
+if exist "dist\veluz.exe" (
     echo.
     echo ==========================================
     echo [SUCCESS] ¡COMPILACIÓN EXITOSA!
     echo ==========================================
     echo.
-    echo [INFO] El ejecutable está en: .\dist\media-dl.exe
+    echo [INFO] El ejecutable está en: .\dist\veluz.exe
     echo.
     echo [INFO] Archivo generado:
-    dir dist\media-dl.exe
+    dir dist\veluz.exe
     echo.
     echo [INFO] Para usar el programa portable:
-    echo   1. Copia el ejecutable dist\media-dl.exe a cualquier ubicación
-    echo   2. Ejecuta: media-dl.exe
+    echo   1. Copia el ejecutable dist\veluz.exe a cualquier ubicación
+    echo   2. Ejecuta: veluz.exe
     echo.
     echo [NOTE] Necesitarás tener instalado en el sistema:
     echo   - aria2c (opcional, para descargas ultra rápidas)
@@ -80,7 +80,7 @@ set /p CLEANUP=¿Deseas limpiar archivos temporales? (s/n):
 if /i "%CLEANUP%"=="s" (
     echo.
     echo [INFO] Limpiando archivos temporales...
-    rmdir /s /q build\media-dl 2>nul
+    rmdir /s /q build\veluz 2>nul
     echo [OK] Limpieza completada
 )
 

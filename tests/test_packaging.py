@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src" / "media_dl"
+SRC = ROOT / "src" / "veluz"
 
 
 def _module_name(distribution: str) -> str:
@@ -69,7 +69,7 @@ class TestDependencies:
             if module not in declared
             and module not in optional
             and module not in _stdlib()
-            and module != "media_dl"
+            and module != "veluz"
         }
 
         assert not missing, f"Importados pero no declarados en pyproject: {sorted(missing)}"
@@ -109,9 +109,11 @@ class TestPackagingMetadata:
     def test_console_script_points_to_wrapper(self):
         """El entry point debe usar cli_main para manejar errores con elegancia."""
         data = tomllib.loads((ROOT / "pyproject.toml").read_text())
-        target = data["project"]["scripts"]["media-dl"]
+        scripts = data["project"]["scripts"]
 
-        assert target.endswith(":cli_main")
+        assert scripts["veluz"].endswith(":cli_main")
+        # Rename compatibility: old muscle memory keeps working.
+        assert scripts["media-dl"].endswith(":cli_main")
 
     def test_optional_extras_are_not_core_dependencies(self):
         """spotdl y scdl son extras: no pueden ser dependencias obligatorias."""
@@ -168,7 +170,7 @@ class TestPyInstallerSpec:
     def excludes(self) -> list[str]:
         """Se lee el spec como Python de verdad, no con regex: si no, los
         nombres citados dentro de comentarios cuentan como exclusiones."""
-        tree = ast.parse((ROOT / "build" / "media_dl.spec").read_text())
+        tree = ast.parse((ROOT / "build" / "veluz.spec").read_text())
         for node in ast.walk(tree):
             if isinstance(node, ast.keyword) and node.arg == "excludes":
                 return list(ast.literal_eval(node.value))
@@ -196,7 +198,7 @@ class TestPyInstallerSpec:
         """
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
         assert ".[spotify" in workflow, "La CI compila el binario sin el extra de Spotify"
-        assert "media_dl.spec" in workflow
+        assert "veluz.spec" in workflow
 
     def test_ci_checks_the_built_binary_in_strict_mode(self):
         """Con --strict, doctor falla si al binario le falta una extensión."""
@@ -211,7 +213,7 @@ class TestPyInstallerSpec:
         módulo desaparece del binario y las carátulas dejan de incrustarse
         sin ningún error visible. collect_all lo blinda.
         """
-        spec = (ROOT / "build" / "media_dl.spec").read_text()
+        spec = (ROOT / "build" / "veluz.spec").read_text()
         assert '"mutagen"' in spec, "El spec debe recoger mutagen a mano"
 
     def test_entry_point_exists_on_disk(self):
@@ -221,7 +223,7 @@ class TestPyInstallerSpec:
         porque PyInstaller inyecta SPECPATH. Se resuelve igual aquí para poder
         comprobar el fichero sin lanzar PyInstaller.
         """
-        tree = ast.parse((ROOT / "build" / "media_dl.spec").read_text())
+        tree = ast.parse((ROOT / "build" / "veluz.spec").read_text())
         call = next(
             node.value
             for node in tree.body

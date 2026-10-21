@@ -1,15 +1,15 @@
 [project]
-name = "media-dl"
-version = "2.1.0"
-description = "Unified Media Downloader - Cyan Edition"
+name = "veluz"
+version = "3.0.0"
+description = "Veluz - Unified Media Downloader (Cyan Edition)"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [
-    {name = "Media Downloader Team", email = "dev@media-dl.example"}
+    {name = "Veluz Team", email = "dev@veluz.example"}
 ]
-keywords = ["downloader", "youtube", "tiktok", "spotify", "soundcloud", "aria2c", "cli"]
+keywords = ["veluz", "downloader", "youtube", "tiktok", "spotify", "soundcloud", "aria2c", "cli"]
 # La licencia se declara con `license = "MIT"` (PEP 639); añadir aquí un
 # clasificador "License ::" hace fallar la instalación con setuptools moderno.
 classifiers = [
@@ -49,7 +49,9 @@ dev = [
 ]
 
 [project.scripts]
-media-dl = "media_dl.main:cli_main"
+veluz = "veluz.main:cli_main"
+# Alias de compatibilidad para quien todavía escribe el nombre antiguo.
+media-dl = "veluz.main:cli_main"
 
 [tool.ruff]
 line-length = 100
@@ -145,7 +147,7 @@ python_functions = ["test_*"]
 addopts = "-v --strict-markers --strict-config"
 
 [tool.coverage.run]
-source = ["src/media_dl"]
+source = ["src/veluz"]
 branch = true
 
 [tool.coverage.report]
@@ -163,7 +165,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["media_dl*"]
+include = ["veluz*"]
 
 [tool.setuptools.package-data]
-media_dl = ["py.typed"]
+veluz = ["py.typed"]

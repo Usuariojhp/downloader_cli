@@ -4,17 +4,17 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from media_dl.cli.commands.download import _run_async as _run
-from media_dl.core.exceptions import ValidationError
-from media_dl.core.extractors import (
+from veluz.cli.commands.download import _run_async as _run
+from veluz.core.exceptions import ValidationError
+from veluz.core.extractors import (
     SoundCloudExtractor,
     SpotifyExtractor,
     TikTokTikwnExtractor,
     YTDLPExtractor,
     get_extractor,
 )
-from media_dl.core.extractors.base import ExtractorRegistry
-from media_dl.core.models import MediaInfo
+from veluz.core.extractors.base import ExtractorRegistry
+from veluz.core.models import MediaInfo
 
 
 class TestRegistryDefaults:
@@ -56,7 +56,7 @@ class TestSelection:
 
     def test_spotify_when_available(self):
         """spotdl es opcional: sin él, el registro cae en yt-dlp."""
-        from media_dl.core.extractors.spotify import check_spotdl
+        from veluz.core.extractors.spotify import check_spotdl
 
         extractor = get_extractor("https://open.spotify.com/track/1")
         if check_spotdl():
@@ -66,7 +66,7 @@ class TestSelection:
 
     def test_soundcloud_when_available(self):
         """scdl es opcional: sin el binario, el registro cae en yt-dlp."""
-        from media_dl.core.extractors.soundcloud import check_scdl
+        from veluz.core.extractors.soundcloud import check_scdl
 
         extractor = get_extractor("https://soundcloud.com/u/t")
         if check_scdl():
@@ -90,7 +90,7 @@ class TestTikTokFallback:
     debe degradar a yt-dlp en vez de romper la descarga."""
 
     def test_falls_back_to_ytdlp_on_api_error(self):
-        from media_dl.core.exceptions import ExtractorError
+        from veluz.core.exceptions import ExtractorError
 
         extractor = TikTokTikwnExtractor()
         url = "https://www.tiktok.com/@u/video/1"
@@ -102,7 +102,7 @@ class TestTikTokFallback:
                 TikTokTikwnExtractor, "_extract_via_api", side_effect=ExtractorError("API caida")
             ) as api,
             patch(
-                "media_dl.core.extractors.ytdlp.YTDLPExtractor.extract",
+                "veluz.core.extractors.ytdlp.YTDLPExtractor.extract",
                 new=AsyncMock(return_value=esperado),
             ) as ytdlp,
         ):
@@ -113,7 +113,7 @@ class TestTikTokFallback:
         assert resultado is esperado
 
     def test_no_fallback_when_disabled(self):
-        from media_dl.core.exceptions import ExtractorError
+        from veluz.core.exceptions import ExtractorError
 
         extractor = TikTokTikwnExtractor()
         extractor.fallback_to_ytdlp = False

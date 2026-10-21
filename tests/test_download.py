@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import typer
 
-from media_dl.cli.commands.download import (
+from veluz.cli.commands.download import (
     BEST_VIDEO,
     _build_batch_request,
     _merge_postprocessors,
@@ -17,9 +17,9 @@ from media_dl.cli.commands.download import (
     run_batch,
     run_video,
 )
-from media_dl.config import Settings
-from media_dl.core.cover import has_cover
-from media_dl.core.models import DownloadRequest, Format, MediaInfo
+from veluz.config import Settings
+from veluz.core.cover import has_cover
+from veluz.core.models import DownloadRequest, Format, MediaInfo
 
 
 @pytest.fixture
@@ -149,28 +149,28 @@ class TestBuildBatchRequest:
 class TestRunBatch:
     def test_rejects_bad_type(self, settings):
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
             pytest.raises(typer.Exit),
         ):
             run_batch(urls=["https://x.com/a"], media_type="pelicula")
 
     def test_rejects_bad_bitrate(self, settings):
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
             pytest.raises(typer.Exit),
         ):
             run_batch(urls=["https://x.com/a"], media_type="audio", bitrate=999)
 
     def test_rejects_missing_file(self, settings, tmp_path):
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
             pytest.raises(typer.Exit),
         ):
             run_batch(file=tmp_path / "no-existe.txt")
 
     def test_no_valid_urls(self, settings):
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
             pytest.raises(typer.Exit),
         ):
             run_batch(urls=["no-es-url", ""])
@@ -183,12 +183,12 @@ class TestRunBatch:
         repo.is_duplicate.return_value = None
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get") as factory,
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
-            patch("media_dl.cli.commands.download._download_batch_item") as download,
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get") as factory,
+            patch("veluz.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download._download_batch_item") as download,
         ):
             strategy = MagicMock()
             strategy.is_available.return_value = True
@@ -210,12 +210,12 @@ class TestRunBatch:
         repo.is_duplicate.return_value = None
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get") as factory,
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
-            patch("media_dl.cli.commands.download._download_batch_item") as download,
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get") as factory,
+            patch("veluz.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download._download_batch_item") as download,
         ):
             strategy = MagicMock()
             strategy.is_available.return_value = True
@@ -236,12 +236,12 @@ class TestRunBatch:
         repo.is_duplicate.return_value = MagicMock(title="Ya estaba")
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get"),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
-            patch("media_dl.cli.commands.download._download_batch_item") as download,
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get"),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download._download_batch_item") as download,
         ):
             run_batch(urls=["https://a.com/1"])
 
@@ -252,11 +252,11 @@ class TestRunBatch:
         repo = MagicMock()
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get"),
-            patch("media_dl.cli.commands.download._run_async", side_effect=RuntimeError("sin red")),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get"),
+            patch("veluz.cli.commands.download._run_async", side_effect=RuntimeError("sin red")),
         ):
             run_batch(urls=["https://a.com/1", "https://a.com/2"])
 
@@ -307,19 +307,19 @@ class TestQualityPrompting:
         strategy.build_args.return_value = {}
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
             patch(
-                "media_dl.cli.commands.download._download_with_retry",
+                "veluz.cli.commands.download._download_with_retry",
                 return_value=str(destino),
             ),
-            patch("media_dl.cli.commands.download._can_ask", return_value=interactive),
-            patch("media_dl.cli.commands.download.prompt_quality") as p_quality,
-            patch("media_dl.cli.commands.download.prompt_audio_format") as p_format,
-            patch("media_dl.cli.commands.download.prompt_audio_bitrate") as p_bitrate,
+            patch("veluz.cli.commands.download._can_ask", return_value=interactive),
+            patch("veluz.cli.commands.download.prompt_quality") as p_quality,
+            patch("veluz.cli.commands.download.prompt_audio_format") as p_format,
+            patch("veluz.cli.commands.download.prompt_audio_bitrate") as p_bitrate,
         ):
             p_quality.return_value = quality_answer
             p_format.return_value = format_answer
@@ -458,25 +458,25 @@ class TestNoOverwrite:
     # ---------- el cálculo del nombre ----------
 
     def test_free_stem_when_nothing_exists(self, tmp_path):
-        from media_dl.cli.commands.download import _free_output_stem
+        from veluz.cli.commands.download import _free_output_stem
 
         assert _free_output_stem(tmp_path, "cancion [abc]") == "cancion [abc]"
 
     def test_free_stem_avoids_existing(self, tmp_path):
-        from media_dl.cli.commands.download import _free_output_stem
+        from veluz.cli.commands.download import _free_output_stem
 
         (tmp_path / "cancion [abc].mp4").write_bytes(b"x")
         assert _free_output_stem(tmp_path, "cancion [abc]") == "cancion [abc] (1)"
 
     def test_free_stem_ignores_extension(self, tmp_path):
         """Un .m4a previo también cuenta como ocupado."""
-        from media_dl.cli.commands.download import _free_output_stem
+        from veluz.cli.commands.download import _free_output_stem
 
         (tmp_path / "cancion [abc].m4a").write_bytes(b"x")
         assert _free_output_stem(tmp_path, "cancion [abc]") == "cancion [abc] (1)"
 
     def test_free_stem_increments(self, tmp_path):
-        from media_dl.cli.commands.download import _free_output_stem
+        from veluz.cli.commands.download import _free_output_stem
 
         (tmp_path / "cancion [abc].mp4").write_bytes(b"x")
         (tmp_path / "cancion [abc] (1).mp4").write_bytes(b"x")
@@ -484,20 +484,20 @@ class TestNoOverwrite:
 
     def test_stem_with_brackets_is_escaped(self, tmp_path):
         """Los corchetes del nombre son comodines de glob: hay que escaparlos."""
-        from media_dl.cli.commands.download import _free_output_stem
+        from veluz.cli.commands.download import _free_output_stem
 
         (tmp_path / "song [live].mp4").write_bytes(b"x")
         assert _free_output_stem(tmp_path, "song [live]") == "song [live] (1)"
 
     def test_outtmpl_uses_stem(self, settings, info):
-        from media_dl.cli.commands.download import _build_ydl_opts
+        from veluz.cli.commands.download import _build_ydl_opts
 
         request = DownloadRequest(url="u", media_type="video", quality=BEST_VIDEO)
         opts = _build_ydl_opts(request, {}, settings, stem="nombre (1)")
         assert opts["outtmpl"].endswith("nombre (1).%(ext)s")
 
     def test_outtmpl_default_unchanged(self, settings, info):
-        from media_dl.cli.commands.download import _build_ydl_opts
+        from veluz.cli.commands.download import _build_ydl_opts
 
         request = DownloadRequest(url="u", media_type="video", quality=BEST_VIDEO)
         opts = _build_ydl_opts(request, {}, settings)
@@ -513,14 +513,14 @@ class TestNoOverwrite:
         strategy.build_args.return_value = {}
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
-            patch("media_dl.cli.commands.download._download_with_retry") as download,
-            patch("media_dl.cli.commands.download.prompt_yes_no", return_value=answer_yes),
-            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download._download_with_retry") as download,
+            patch("veluz.cli.commands.download.prompt_yes_no", return_value=answer_yes),
+            patch("veluz.cli.commands.download._can_ask", return_value=False),
         ):
             if answer_yes:
                 run_video(url=info.url, force=force)
@@ -562,13 +562,13 @@ class TestNoOverwrite:
         strategy.build_args.return_value = {}
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
-            patch("media_dl.cli.commands.download._download_with_retry") as download,
-            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download._download_with_retry") as download,
+            patch("veluz.cli.commands.download._can_ask", return_value=False),
         ):
             run_video(url=info.url)
 
@@ -584,16 +584,16 @@ class TestNoOverwrite:
         strategy.build_args.return_value = {}
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
             patch(
-                "media_dl.cli.commands.download._download_with_retry",
+                "veluz.cli.commands.download._download_with_retry",
                 return_value="/no/existe/nada.mp4",
             ),
-            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+            patch("veluz.cli.commands.download._can_ask", return_value=False),
         ):
             run_video(url=info.url)
 
@@ -624,15 +624,15 @@ class TestMediaUrl:
         destino.write_bytes(b"x" * 32)
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
             patch(
-                "media_dl.cli.commands.download._download_with_retry", return_value=str(destino)
+                "veluz.cli.commands.download._download_with_retry", return_value=str(destino)
             ) as download,
-            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+            patch("veluz.cli.commands.download._can_ask", return_value=False),
         ):
             run_audio(url=info.url, audio_format="mp3", bitrate=192)
 
@@ -658,15 +658,15 @@ class TestMediaUrl:
         destino.write_bytes(b"x" * 32)
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
             patch(
-                "media_dl.cli.commands.download._download_with_retry", return_value=str(destino)
+                "veluz.cli.commands.download._download_with_retry", return_value=str(destino)
             ) as download,
-            patch("media_dl.cli.commands.download._can_ask", return_value=False),
+            patch("veluz.cli.commands.download._can_ask", return_value=False),
         ):
             run_video(url=info.url)
 
@@ -704,14 +704,14 @@ class TestCoverEmbedding:
         destino.write_bytes(b"\xff\xfb\x90\x64" + b"\x00" * 64)
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
-            patch("media_dl.cli.commands.download._download_with_retry", return_value=str(destino)),
-            patch("media_dl.cli.commands.download._can_ask", return_value=False),
-            patch("media_dl.cli.commands.download.explain_embed_cover") as embed,
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download._download_with_retry", return_value=str(destino)),
+            patch("veluz.cli.commands.download._can_ask", return_value=False),
+            patch("veluz.cli.commands.download.explain_embed_cover") as embed,
         ):
             embed.return_value = cover_result
             fn(url=info.url)
@@ -752,14 +752,14 @@ class TestCoverEmbedding:
         destino.write_bytes(b"\xff\xfb\x90\x64" + b"\x00" * 64)
 
         with (
-            patch("media_dl.cli.commands.download.get_settings", return_value=settings),
-            patch("media_dl.cli.commands.download.get_extractor"),
-            patch("media_dl.cli.commands.download.HistoryRepository", return_value=repo),
-            patch("media_dl.cli.commands.download.StrategyFactory.get", return_value=strategy),
-            patch("media_dl.cli.commands.download._run_async", return_value=info),
-            patch("media_dl.cli.commands.download._download_with_retry", return_value=str(destino)),
-            patch("media_dl.cli.commands.download._can_ask", return_value=False),
-            patch("media_dl.core.cover._fetch", return_value=(b"\x89PNG-falso", "ok")),
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download._download_with_retry", return_value=str(destino)),
+            patch("veluz.cli.commands.download._can_ask", return_value=False),
+            patch("veluz.core.cover._fetch", return_value=(b"\x89PNG-falso", "ok")),
         ):
             run_audio(url=info.url)
 

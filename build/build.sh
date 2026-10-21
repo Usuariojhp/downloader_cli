@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build script for media-dl portable executable
+# Build script for veluz portable executable
 # Supports Linux and macOS
 
 set -e
@@ -12,7 +12,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${CYAN}=========================================="
-echo -e "  media-dl - Build Portable Executable"
+echo -e "  veluz - Build Portable Executable"
 echo -e "==========================================${NC}"
 echo ""
 
@@ -48,24 +48,24 @@ echo ""
 echo -e "${CYAN}🔨 Compilando ejecutable portable...${NC}"
 echo ""
 
-pyinstaller --clean --noconfirm build/media_dl.spec
+pyinstaller --clean --noconfirm build/veluz.spec
 
 # Verify build
-if [ -f "dist/media-dl" ]; then
+if [ -f "dist/veluz" ]; then
     echo ""
     echo -e "${GREEN}=========================================="
     echo -e "✅ ¡COMPILACIÓN EXITOSA!"
     echo -e "==========================================${NC}"
     echo ""
-    echo -e "${CYAN}📁 El ejecutable está en: ./dist/media-dl${NC}"
+    echo -e "${CYAN}📁 El ejecutable está en: ./dist/veluz${NC}"
     echo ""
     echo -e "${YELLOW}Archivo generado:${NC}"
-    ls -lh dist/media-dl
+    ls -lh dist/veluz
     echo ""
     echo -e "${CYAN}Para usar el programa portable:${NC}"
-    echo "  1. Copia el ejecutable 'dist/media-dl' a cualquier ubicación"
-    echo "  2. Dale permisos: chmod +x media-dl"
-    echo "  3. Ejecuta: ./media-dl"
+    echo "  1. Copia el ejecutable 'dist/veluz' a cualquier ubicación"
+    echo "  2. Dale permisos: chmod +x veluz"
+    echo "  3. Ejecuta: ./veluz"
     echo ""
     echo -e "${YELLOW}Nota: Necesitarás tener instalado en el sistema:${NC}"
     echo "  • aria2c (opcional, para descargas ultra rápidas)"
@@ -82,7 +82,7 @@ read -p "¿Deseas limpiar archivos temporales? (s/n): " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Ss]$ ]]; then
     echo -e "${CYAN}🧹 Limpiando archivos temporales...${NC}"
-    rm -rf build/media-dl
+    rm -rf build/veluz
     rm -rf *.spec
     echo -e "${GREEN}✅ Limpieza completada${NC}"
 fi

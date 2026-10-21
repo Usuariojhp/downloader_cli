@@ -5,7 +5,7 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
-from media_dl.core.progress import (
+from veluz.core.progress import (
     PartialFileMonitor,
     _count_bits,
     _parse_aria2_control,
@@ -80,9 +80,7 @@ class TestParseAria2Control:
 
 class TestPartialFileMonitor:
     def test_patterns_cover_part_and_plain_control_files(self):
-        part_pattern = PartialFileMonitor._build_pattern(
-            "/tmp/video [abc].%(ext)s"
-        )
+        part_pattern = PartialFileMonitor._build_pattern("/tmp/video [abc].%(ext)s")
         patterns = PartialFileMonitor._build_control_patterns(part_pattern)
         assert patterns == (
             "/tmp/video [[]abc].*.part.aria2",

@@ -1,6 +1,6 @@
 """Tests for core models."""
 
-from media_dl.core.models import (
+from veluz.core.models import (
     DownloadRequest,
     DownloadResult,
     Format,
@@ -56,7 +56,7 @@ class TestDuration:
         assert entry.duration == 90.75
 
     def test_format_duration_accepts_float(self):
-        from media_dl.ui.tables import format_duration
+        from veluz.ui.tables import format_duration
 
         assert format_duration(90.75) == "1m 30s"
         assert format_duration(74.304) == "1m 14s"

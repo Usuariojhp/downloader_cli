@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from media_dl.config import Settings, get_settings, reset_settings
-from media_dl.config.settings import CONFIG_FILE_NAME, default_config_dir
+from veluz.config import Settings, get_settings, reset_settings
+from veluz.config.settings import CONFIG_FILE_NAME, default_config_dir
 
 
 def make_settings(tmp_path: Path, **overrides) -> Settings:
@@ -37,8 +37,29 @@ class TestDefaults:
         assert fresh.retry_attempts == 3
 
     def test_default_config_dir_uses_env(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("VELUZ_CONFIG_DIR", str(tmp_path))
+        assert default_config_dir() == tmp_path
+
+    def test_legacy_config_dir_env_is_still_honored(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("VELUZ_CONFIG_DIR", raising=False)
         monkeypatch.setenv("MEDIA_DL_CONFIG_DIR", str(tmp_path))
         assert default_config_dir() == tmp_path
+
+    def test_migrates_old_config_dir_on_first_run(self, tmp_path, monkeypatch):
+        old = tmp_path / "media-dl"
+        new = tmp_path / "veluz"
+        old.mkdir()
+        (old / "config.json").write_text('{"retry_attempts": 7}', encoding="utf-8")
+
+        monkeypatch.delenv("VELUZ_CONFIG_DIR", raising=False)
+        monkeypatch.delenv("MEDIA_DL_CONFIG_DIR", raising=False)
+        monkeypatch.setattr(
+            "veluz.config.settings.platformdirs.user_config_dir",
+            lambda app: str(old if app == "media-dl" else new),
+        )
+
+        assert default_config_dir() == new
+        assert (new / "config.json").is_file()
 
 
 class TestPersistence:
@@ -73,7 +94,19 @@ class TestPersistence:
     def test_env_wins_over_json(self, tmp_path, monkeypatch):
         make_settings(tmp_path, retry_attempts=5).save_config()
 
-        monkeypatch.setenv("MEDIA_DL_RETRY_ATTEMPTS", "4")
+        monkeypatch.setenv("VELUZ_RETRY_ATTEMPTS", "4")
+        reloaded = Settings(config_dir=tmp_path, db_path=tmp_path / "h.db")
+        assert reloaded.retry_attempts == 4
+
+    def test_legacy_env_prefix_is_still_read(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("VELUZ_RETRY_ATTEMPTS", raising=False)
+        monkeypatch.setenv("MEDIA_DL_RETRY_ATTEMPTS", "6")
+        reloaded = Settings(config_dir=tmp_path, db_path=tmp_path / "h.db")
+        assert reloaded.retry_attempts == 6
+
+    def test_new_env_prefix_wins_over_legacy(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("VELUZ_RETRY_ATTEMPTS", "4")
+        monkeypatch.setenv("MEDIA_DL_RETRY_ATTEMPTS", "6")
         reloaded = Settings(config_dir=tmp_path, db_path=tmp_path / "h.db")
         assert reloaded.retry_attempts == 4
 
@@ -120,7 +153,7 @@ class TestValidation:
 
 class TestSingleton:
     def test_get_settings_is_cached(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("MEDIA_DL_CONFIG_DIR", str(tmp_path))
+        monkeypatch.setenv("VELUZ_CONFIG_DIR", str(tmp_path))
         reset_settings()
 
         first = get_settings()
@@ -151,8 +184,8 @@ class TestSpotifyCredentials:
     def test_spotify_credentials_env_override(self, tmp_path, monkeypatch):
         make_settings(tmp_path, spotify_client_id="from_json").save_config()
 
-        monkeypatch.setenv("MEDIA_DL_SPOTIFY_CLIENT_ID", "from_env")
-        monkeypatch.setenv("MEDIA_DL_SPOTIFY_CLIENT_SECRET", "secret_from_env")
+        monkeypatch.setenv("VELUZ_SPOTIFY_CLIENT_ID", "from_env")
+        monkeypatch.setenv("VELUZ_SPOTIFY_CLIENT_SECRET", "secret_from_env")
 
         reloaded = Settings(config_dir=tmp_path, db_path=tmp_path / "h.db")
         assert reloaded.spotify_client_id == "from_env"

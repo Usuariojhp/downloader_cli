@@ -12,8 +12,8 @@ from unittest.mock import patch
 
 import certifi
 
-from media_dl.core import cover as cover_module
-from media_dl.core.cover import (
+from veluz.core import cover as cover_module
+from veluz.core.cover import (
     embed_cover,
     explain_embed_cover,
     has_cover,
@@ -64,7 +64,7 @@ class TestEmbedCoverMp3:
         target = _mp3(temp_dir / "cancion.mp3")
         png = _png()
 
-        with patch("media_dl.core.cover._fetch", return_value=(png, "ok")):
+        with patch("veluz.core.cover._fetch", return_value=(png, "ok")):
             assert embed_cover(target, "https://cdn.example/cover.png") is True
 
         assert has_cover(target) is True
@@ -77,9 +77,9 @@ class TestEmbedCoverMp3:
     def test_replaces_existing_picture(self, temp_dir: Path) -> None:
         target = _mp3(temp_dir / "cancion.mp3")
 
-        with patch("media_dl.core.cover._fetch", return_value=(_png((1, 1, 1)), "ok")):
+        with patch("veluz.core.cover._fetch", return_value=(_png((1, 1, 1)), "ok")):
             embed_cover(target, "https://cdn.example/a.png")
-        with patch("media_dl.core.cover._fetch", return_value=(_png((2, 2, 2)), "ok")):
+        with patch("veluz.core.cover._fetch", return_value=(_png((2, 2, 2)), "ok")):
             embed_cover(target, "https://cdn.example/b.png")
 
         from mutagen.id3 import ID3
@@ -91,7 +91,7 @@ class TestEmbedCoverMp3:
         target = _mp3(temp_dir / "cancion.mp3")
         before = target.read_bytes()
 
-        with patch("media_dl.core.cover._fetch", return_value=(None, "no se pudo descargar")):
+        with patch("veluz.core.cover._fetch", return_value=(None, "no se pudo descargar")):
             assert embed_cover(target, "https://cdn.example/cae.png") is False
 
         assert target.read_bytes() == before
@@ -104,7 +104,7 @@ class TestEmbedCoverEdgeCases:
         assert has_cover(target) is False
 
     def test_missing_file_is_a_noop(self, temp_dir: Path) -> None:
-        with patch("media_dl.core.cover._fetch") as fetch:
+        with patch("veluz.core.cover._fetch") as fetch:
             assert embed_cover(temp_dir / "nada.mp3", "https://cdn.example/c.png") is False
         fetch.assert_not_called()
 
@@ -170,7 +170,7 @@ class TestEmbedCoverEdgeCases:
         with (
             patch.dict(os.environ, {"SSL_CERT_FILE": ca}),
             patch.object(sys, "_MEIPASS", "", create=True),
-            patch("media_dl.core.cover.urllib.request.urlopen") as urlopen,
+            patch("veluz.core.cover.urllib.request.urlopen") as urlopen,
         ):
             urlopen.return_value.__enter__.return_value.read.return_value = b"imagen"
             _imagen, motivo = cover_module._fetch("https://cdn.example/c.jpg")
@@ -182,7 +182,7 @@ class TestEmbedCoverEdgeCases:
         """Un SSL_CERT_FILE que no vale no puede tumbar la descarga."""
         with (
             patch.dict(os.environ, {"SSL_CERT_FILE": "/no/existe/cacert.pem"}, clear=False),
-            patch("media_dl.core.cover.urllib.request.urlopen") as urlopen,
+            patch("veluz.core.cover.urllib.request.urlopen") as urlopen,
         ):
             urlopen.return_value.__enter__.return_value.read.return_value = b"imagen"
             _imagen, motivo = cover_module._fetch("https://cdn.example/c.jpg")
@@ -195,7 +195,7 @@ class TestEmbedCoverEdgeCases:
         with (
             patch.dict(os.environ, {"SSL_CERT_FILE": "/no/existe/cacert.pem"}, clear=False),
             patch.object(sys, "_MEIPASS", "", create=True),
-            patch("media_dl.core.cover.urllib.request.urlopen") as urlopen,
+            patch("veluz.core.cover.urllib.request.urlopen") as urlopen,
         ):
             urlopen.return_value.__enter__.return_value.read.return_value = b"imagen"
             _imagen, motivo = cover_module._fetch("https://cdn.example/c.jpg")
@@ -219,18 +219,18 @@ class TestEmbedCoverEdgeCases:
         target = temp_dir / "cancion.ogg"
         target.write_bytes(b"OggS" + b"\x00" * 64)
 
-        with patch("media_dl.core.cover._fetch", return_value=(_png(), "ok")):
+        with patch("veluz.core.cover._fetch", return_value=(_png(), "ok")):
             assert embed_cover(target, "https://cdn.example/cover.png") is False
         assert has_cover(target) is False
 
     def test_download_failure_returns_none(self) -> None:
-        from media_dl.core.cover import _fetch
+        from veluz.core.cover import _fetch
 
         with patch("urllib.request.urlopen", side_effect=OSError("sin red")):
             assert _fetch("https://cdn.example/cover.png")[0] is None
 
     def test_fetch_returns_bytes(self) -> None:
-        from media_dl.core.cover import _fetch
+        from veluz.core.cover import _fetch
 
         png = _png()
         with patch("urllib.request.urlopen", return_value=_FakeResponse(png)):
@@ -266,7 +266,7 @@ class TestEmbedCoverEdgeCases:
         with (
             patch.object(sys, "_MEIPASS", None, create=True),
             patch.dict(os.environ, {}, clear=True),
-            patch("media_dl.core.cover.ssl.get_default_verify_paths") as vpaths,
+            patch("veluz.core.cover.ssl.get_default_verify_paths") as vpaths,
         ):
             vpaths.return_value = type(
                 "obj", (), {"openssl_cafile": certifi.where(), "openssl_capath": ""}
@@ -280,7 +280,7 @@ class TestEmbedCoverEdgeCases:
         with (
             patch.object(sys, "_MEIPASS", None, create=True),
             patch.dict(os.environ, {}, clear=True),
-            patch("media_dl.core.cover.ssl.get_default_verify_paths") as vpaths,
+            patch("veluz.core.cover.ssl.get_default_verify_paths") as vpaths,
         ):
             vpaths.return_value = type(
                 "obj", (), {"openssl_cafile": "/no/existe.pem", "openssl_capath": "/no/existe"}

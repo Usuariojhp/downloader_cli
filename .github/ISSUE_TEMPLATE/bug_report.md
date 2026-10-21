@@ -16,7 +16,7 @@ assignees: ""
 # El comando exacto que ejecutaste
 ```
 
-## Salida de `media-dl doctor`
+## Salida de `veluz doctor`
 
 ```text
 <!-- Pega aquí la salida. Es el dato más útil para diagnosticar. -->
@@ -27,7 +27,7 @@ assignees: ""
 
 - Sistema y versión: <!-- Fedora 44 / Ubuntu 24.04 / Windows 11 / macOS 15 -->
 - Python: <!-- python3 --version -->
-- Versión de media-dl: <!-- media-dl --version -->
+- Versión de veluz: <!-- veluz --version -->
 
 ## Qué esperabas y qué pasó
 

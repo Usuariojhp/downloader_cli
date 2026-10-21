@@ -8,9 +8,8 @@ dist/
 *.egg-info/
 *.egg
 
-# PyInstaller (los scripts de build/ SI se versionan)
-build/media-dl/
-build/media_dl/
+# PyInstaller (los scripts de build/ SÍ se versionan)
+build/veluz/
 *.spec.bak
 
 # Virtual environments

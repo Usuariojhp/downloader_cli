@@ -2,13 +2,13 @@
 
 import pytest
 
-from media_dl.core.exceptions import ValidationError
-from media_dl.core.extractors import (
+from veluz.core.exceptions import ValidationError
+from veluz.core.extractors import (
     TikTokTikwnExtractor,
     YTDLPExtractor,
     get_extractor,
 )
-from media_dl.core.extractors.base import ExtractorRegistry
+from veluz.core.extractors.base import ExtractorRegistry
 
 
 class TestYTDLPExtractor:

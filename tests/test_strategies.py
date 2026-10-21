@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 import pytest
 
-from media_dl.config import Settings
-from media_dl.core.exceptions import StrategyError
-from media_dl.core.strategies import (
+from veluz.config import Settings
+from veluz.core.exceptions import StrategyError
+from veluz.core.strategies import (
     Aria2cStrategy,
     NativeStrategy,
     StrategyFactory,

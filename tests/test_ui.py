@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 import pytest
 
-from media_dl.core.exceptions import ValidationError
-from media_dl.ui import menus, prompts
-from media_dl.ui import tables as tables_module
+from veluz.core.exceptions import ValidationError
+from veluz.ui import menus, prompts
+from veluz.ui import tables as tables_module
 
 
 class TestNonInteractive:
@@ -222,7 +222,7 @@ class TestMarkupInjection:
         return capture.get()
 
     def test_panels_keep_brackets(self):
-        from media_dl.ui import (
+        from veluz.ui import (
             show_error_panel,
             show_info_panel,
             show_success_panel,
@@ -239,7 +239,7 @@ class TestMarkupInjection:
             assert "[id123].mp4" in salida, panel.__name__
 
     def test_panel_title_with_brackets(self):
-        from media_dl.ui import show_success_panel
+        from veluz.ui import show_success_panel
 
         salida = self._render(show_success_panel, "✅ OK [2]", "contenido")
         assert "OK [2]" in salida
@@ -247,8 +247,8 @@ class TestMarkupInjection:
     def test_history_table_keeps_brackets(self):
         from datetime import datetime
 
-        from media_dl.core.history.models import DownloadHistory
-        from media_dl.ui.tables import create_history_table
+        from veluz.core.history.models import DownloadHistory
+        from veluz.ui.tables import create_history_table
 
         record = DownloadHistory(
             title="Cancion [live] (2024)",
@@ -263,8 +263,8 @@ class TestMarkupInjection:
         assert "[live]" in salida
 
     def test_media_info_table_keeps_brackets(self):
-        from media_dl.core.models import MediaInfo
-        from media_dl.ui.tables import create_media_info_table
+        from veluz.core.models import MediaInfo
+        from veluz.ui.tables import create_media_info_table
 
         info = MediaInfo(
             id="x",
@@ -278,8 +278,8 @@ class TestMarkupInjection:
         assert "[remaster]" in salida
 
     def test_playlist_table_keeps_brackets(self):
-        from media_dl.core.models import PlaylistEntry
-        from media_dl.ui.tables import create_playlist_table
+        from veluz.core.models import PlaylistEntry
+        from veluz.ui.tables import create_playlist_table
 
         entries = [PlaylistEntry(id="1", title="Video [HD]", url="u")]
         table = create_playlist_table(entries)
@@ -290,7 +290,7 @@ class TestMarkupInjection:
 
 class TestTables:
     def test_format_size(self):
-        from media_dl.ui.tables import format_size
+        from veluz.ui.tables import format_size
 
         assert format_size(0) == "Desconocido"
         assert format_size(None) == "Desconocido"
@@ -301,13 +301,13 @@ class TestTables:
 
     def test_format_size_keeps_precision(self):
         """Regresión: reutilizar la variable int como float perdía decimales."""
-        from media_dl.ui.tables import format_size
+        from veluz.ui.tables import format_size
 
         assert format_size(1536) == "1.50 KB"
         assert format_size(1610612736) == "1.50 GB"
 
     def test_format_duration(self):
-        from media_dl.ui.tables import format_duration
+        from veluz.ui.tables import format_duration
 
         assert format_duration(None) == "N/A"
         assert format_duration(0) == "N/A"
@@ -317,8 +317,8 @@ class TestTables:
 
     def test_history_table_without_date(self):
         """Regresión: download_date None reventaba en strftime."""
-        from media_dl.core.history.models import DownloadHistory
-        from media_dl.ui.tables import create_history_table
+        from veluz.core.history.models import DownloadHistory
+        from veluz.ui.tables import create_history_table
 
         record = DownloadHistory(title="x", download_date=None)
         table = create_history_table([record])
