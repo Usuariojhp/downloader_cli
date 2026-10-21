@@ -165,6 +165,18 @@ def _build_ydl_opts(
     name = stem or "%(title).100s [%(id)s]"
     output_template = str(base_path / f"{name}.%(ext)s")
 
+    # YouTube without a JavaScript runtime only exposes the progressive
+    # format 18 (video+audio) through the android client; DASH/HLS URLs need
+    # deno/node.  That is fine for video (a single https file, no merge) but
+    # it hides every audio-only stream, so audio mode asks for the default
+    # clients first and keeps android as a fallback.
+    youtube_args: dict[str, Any] = {
+        "player_client": ["android", "tv_embedded", "web"],
+        "skip": ["dash", "hls"],
+    }
+    if request.media_type == "audio":
+        youtube_args = {"player_client": ["default", "android"]}
+
     opts = {
         "outtmpl": output_template,
         "merge_output_format": "mp4",
@@ -174,12 +186,7 @@ def _build_ydl_opts(
         "no_warnings": True,
         "retries": settings.retry_attempts,
         "fragment_retries": settings.retry_attempts,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "tv_embedded", "web"],
-                "skip": ["dash", "hls"],
-            }
-        },
+        "extractor_args": {"youtube": youtube_args},
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -206,6 +213,10 @@ def _build_ydl_opts(
         ]
     else:
         opts["format"] = "bestaudio/best"
+        # "best" keeps the original codec: if only a combined format is
+        # available (no JS runtime), this pulls the audio out (mp4 -> m4a,
+        # webm -> opus) instead of leaving a video file on disk.
+        opts["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "best"}]
 
     if request.subtitles:
         opts["writesubtitles"] = True
@@ -268,6 +279,14 @@ def _download_with_retry(
                 result = ydl.process_ie_result(info, download=True)
                 if monitor:
                     monitor.complete()
+                # Postprocessors can change the container (mp4 -> m4a,
+                # webm -> opus, mp4 -> mp3); requested_downloads keeps the
+                # real path after postprocessing.
+                requested = result.get("requested_downloads") or []
+                if requested and isinstance(requested[0], dict):
+                    final_path = requested[0].get("filepath")
+                    if final_path:
+                        return cast(str, final_path)
                 return cast(str, ydl.prepare_filename(result))
 
         except Exception as e:
@@ -551,8 +570,20 @@ def run_audio(
             duration = time.time() - start_time
 
         file_path = Path(filepath)
-        if audio_format == "mp3":
-            file_path = file_path.with_suffix(".mp3")
+        if not file_path.exists():
+            # Older yt-dlp builds report the pre-postprocessor path; the
+            # extract-audio step can change the container (webm -> opus,
+            # mp4 -> m4a/mp3), so look for the real audio file next to it.
+            extensions = (
+                (".mp3",)
+                if audio_format == "mp3"
+                else (".m4a", ".opus", ".webm", ".ogg", ".mp3", ".aac")
+            )
+            for extension in extensions:
+                candidate = file_path.with_suffix(extension)
+                if candidate.exists():
+                    file_path = candidate
+                    break
 
         if not file_path.exists():
             show_warning_panel(

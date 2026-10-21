@@ -433,6 +433,75 @@ class TestQualityPrompting:
         assert mocks["bitrate"].call_args.kwargs["default"] == 320
 
 
+class TestYoutubeAudioFormats:
+    """Sin runtime JS, YouTube solo ofrece el format 18 (vídeo+audio).
+
+    El audio debe pedir los clientes por defecto para conseguir pistas
+    audio-only, y extraer la pista como red de seguridad cuando solo llega
+    un formato combinado.
+    """
+
+    def test_audio_opts_ask_for_default_clients(self, settings):
+        from veluz.cli.commands.download import _build_ydl_opts
+
+        request = DownloadRequest(url="u", media_type="audio", format="original", bitrate=192)
+        opts = _build_ydl_opts(request, {}, settings, stem="cancion")
+
+        youtube = opts["extractor_args"]["youtube"]
+        assert youtube["player_client"][0] == "default"
+        assert "skip" not in youtube
+
+    def test_audio_original_extracts_codec_without_reencoding(self, settings):
+        from veluz.cli.commands.download import _build_ydl_opts
+
+        request = DownloadRequest(url="u", media_type="audio", format="original", bitrate=192)
+        opts = _build_ydl_opts(request, {}, settings, stem="cancion")
+
+        assert opts["format"] == "bestaudio/best"
+        extract = [p for p in opts["postprocessors"] if p.get("key") == "FFmpegExtractAudio"]
+        assert extract
+        assert extract[0]["preferredcodec"] == "best"
+
+    def test_video_keeps_the_no_js_workaround(self, settings):
+        from veluz.cli.commands.download import _build_ydl_opts
+
+        request = DownloadRequest(url="u", media_type="video", quality=BEST_VIDEO)
+        opts = _build_ydl_opts(request, {}, settings, stem="video")
+
+        youtube = opts["extractor_args"]["youtube"]
+        assert youtube["player_client"] == ["android", "tv_embedded", "web"]
+        assert youtube["skip"] == ["dash", "hls"]
+
+
+class TestAudioPostprocessedContainer:
+    def test_run_audio_finds_the_postprocessed_file(self, settings, info, tmp_path):
+        from veluz.cli.commands.download import run_audio
+
+        expected = tmp_path / "Test [abc].opus"
+        expected.write_bytes(b"x" * 64)
+        pre_pp = tmp_path / "Test [abc].webm"  # ruta previa al postprocesado
+
+        repo = MagicMock()
+        repo.is_duplicate.return_value = None
+        strategy = MagicMock()
+        strategy.is_available.return_value = True
+        strategy.build_args.return_value = {}
+
+        with (
+            patch("veluz.cli.commands.download.get_settings", return_value=settings),
+            patch("veluz.cli.commands.download.get_extractor"),
+            patch("veluz.cli.commands.download.HistoryRepository", return_value=repo),
+            patch("veluz.cli.commands.download.StrategyFactory.get", return_value=strategy),
+            patch("veluz.cli.commands.download._run_async", return_value=info),
+            patch("veluz.cli.commands.download._download_with_retry", return_value=str(pre_pp)),
+            patch("veluz.cli.commands.download._can_ask", return_value=False),
+            patch("veluz.cli.commands.download.explain_embed_cover", return_value=(True, "")),
+        ):
+            run_audio(url=info.url, audio_format="original")
+
+        assert repo.add.call_args.kwargs["file_path"] == str(expected)
+
+
 class TestNoOverwrite:
     """Al volver a descargar lo mismo nunca se pisa el archivo anterior."""
 
