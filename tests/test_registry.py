@@ -64,15 +64,11 @@ class TestSelection:
         else:
             assert isinstance(extractor, YTDLPExtractor)
 
-    def test_soundcloud_when_available(self):
-        """scdl es opcional: sin el binario, el registro cae en yt-dlp."""
-        from veluz.core.extractors.soundcloud import check_scdl
-
+    def test_soundcloud_links_use_soundcloud_extractor(self):
+        """SoundCloud se atiende con su extractor dedicado (que delega a yt-dlp)."""
         extractor = get_extractor("https://soundcloud.com/u/t")
-        if check_scdl():
-            assert isinstance(extractor, SoundCloudExtractor)
-        else:
-            assert isinstance(extractor, YTDLPExtractor)
+
+        assert isinstance(extractor, SoundCloudExtractor)
 
     def test_spotify_and_soundcloud_are_registered(self):
         """Aunque falte el extra, el extractor está registrado y con prioridad."""
@@ -132,6 +128,23 @@ class TestTikTokFallback:
 
         with patch.object(TikTokTikwnExtractor, "_extract_via_api", return_value=info):
             assert _run(extractor.extract("https://www.tiktok.com/@u/video/1")) is info
+
+
+class TestSoundCloudDelegation:
+    """SoundCloud delega la extracción real a yt-dlp (scdl ya no se usa)."""
+
+    def test_extract_delegates_to_ytdlp(self):
+        url = "https://soundcloud.com/u/t"
+        esperado = MediaInfo(id="1", title="tema", url=url, platform="SoundCloud")
+
+        with patch(
+            "veluz.core.extractors.ytdlp.YTDLPExtractor.extract",
+            new=AsyncMock(return_value=esperado),
+        ) as ytdlp:
+            resultado = _run(SoundCloudExtractor().extract(url))
+
+        ytdlp.assert_awaited_once_with(url)
+        assert resultado is esperado
 
 
 class TestUrlValidation:
