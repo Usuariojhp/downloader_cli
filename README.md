@@ -1,8 +1,8 @@
 # 🚀 veluz - Unified Media Downloader
 
-**Cyan Edition v3.0.0** - Descargador multimedia unificado con interfaz moderna en tonos cian.
+**Cyan Edition v3.0.1** - Descargador multimedia unificado con interfaz moderna en tonos cian.
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue)](https://github.com/Usuariojhp/veluz_downloader)
+[![Version](https://img.shields.io/badge/version-3.0.1-blue)](https://github.com/Usuariojhp/veluz_downloader)
 [![CI](https://github.com/Usuariojhp/veluz_downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/Usuariojhp/veluz_downloader/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11+-green)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
@@ -571,4 +571,4 @@ con la salida de `veluz doctor` y el comando exacto que ejecutaste.
 
 **Desarrollado con ❤️ para la comunidad**
 
-*veluz v3.0.0 - Cyan Edition*
+*veluz v3.0.1 - Cyan Edition*
